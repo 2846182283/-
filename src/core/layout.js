@@ -303,11 +303,11 @@ export const ROAD_MARKINGS = [
   // station-front road: zebra linking the plaza and the main street
   { type: 'zebra', street: 'stationFront', x: -1.0, length: 3.0 },
   // crossing road: stop lines and warnings before the level crossing
-  { type: 'stopLine', street: 'crossing', z: -22.4, lateral: 1.35, width: 2.6 },
-  { type: 'stopLine', street: 'crossing', z: -42.0, lateral: -1.35, width: 2.6 },
-  { type: 'tomare', street: 'crossing', z: -19.6, lateral: 1.35, readFrom: 'south' },
-  { type: 'tomare', street: 'crossing', z: -44.6, lateral: -1.35, readFrom: 'north' },
-  { type: 'text', text: '踏切注意', street: 'crossing', z: -12.5, lateral: 1.35, readFrom: 'south' },
+  { type: 'stopLine', street: 'crossing', z: -22.4, lateral: -1.35, width: 2.6 }, // northbound = west half (keep left)
+  { type: 'stopLine', street: 'crossing', z: -42.0, lateral: 1.35, width: 2.6 }, // southbound = east half
+  { type: 'tomare', street: 'crossing', z: -19.6, lateral: -1.35, readFrom: 'south' },
+  { type: 'tomare', street: 'crossing', z: -44.6, lateral: 1.35, readFrom: 'north' },
+  { type: 'text', text: '踏切注意', street: 'crossing', z: -12.5, lateral: -1.35, readFrom: 'south' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -925,17 +925,79 @@ export const CAMERAS = {
   aerial: { pos: [70, 38, 70], look: [-4, 0, -18], fov: 45, label: '俯瞰' },
 };
 
+/**
+ * Paved-surface lifts above groundY used by terrain.js (roads, plaza tiles,
+ * aprons, konbini forecourt).  Anything standing on a paved surface should use
+ * surfaceY() so it neither floats nor sinks.
+ */
+export const SURFACE_LIFT = { road: 0.03, plaza: 0.07, apron: 0.07, konbiniForecourt: 0.11 };
+
+function onRoad(x, z) {
+  const sf = ROADS.stationFront, cr = ROADS.crossingRoad, nr = ROADS.northRoad;
+  if (Math.abs(z - sf.z) <= sf.halfWidth + 1 && x >= sf.from && x <= sf.to) return true;
+  if (Math.abs(x - cr.x) <= cr.halfWidth && z >= cr.from && z <= cr.to) return true;
+  if (Math.abs(z - nr.z) <= nr.halfWidth && x >= nr.from && x <= nr.to) return true;
+  if (z >= MAIN_STREET.zStart && z <= MAIN_STREET.zEnd && Math.abs(x - MAIN_STREET.centerX(z)) <= MAIN_STREET.shoulder) return true;
+  return false;
+}
+
+/** Top of the visible ground/paving at (x, z) (approximate: plaza, aprons, roads, forecourt). */
+export function surfaceY(x, z) {
+  const g = groundY(x, z);
+  const P = PLAZA;
+  if ((x >= P.xMin && x <= P.xMax && z >= P.zMin && z <= P.zMax) || (x >= P.east.xMin && x <= P.east.xMax && z >= P.east.zMin && z <= P.east.zMax)) return g + SURFACE_LIFT.plaza;
+  if (onRoad(x, z)) return g + SURFACE_LIFT.road;
+  if (z >= MAIN_STREET.zStart && z <= MAIN_STREET.zEnd) {
+    const d = Math.abs(x - MAIN_STREET.centerX(z));
+    if (d > MAIN_STREET.gutter[1] && d < MAIN_STREET.lotFront + 3.2) {
+      const k = LOTS.find((l) => l.type === 'konbini');
+      if (k) {
+        const lx = (x - k.x) * Math.cos(k.rotY) - (z - k.z) * Math.sin(k.rotY);
+        const lz = (x - k.x) * Math.sin(k.rotY) + (z - k.z) * Math.cos(k.rotY);
+        if (Math.abs(lx) <= k.width / 2 && lz >= k.depth / 2 && lz <= k.depth / 2 + k.setback + 0.2) return g + SURFACE_LIFT.konbiniForecourt;
+      }
+      return g + SURFACE_LIFT.apron;
+    }
+  }
+  return g;
+}
+
+/** Platform surface height along x (flat top, west ramp to the in-station crossing landing, east ramp to the ground). */
+export function platformY(x) {
+  const P = PLATFORM;
+  const xRampW = P.xMin + 1.0, xLandE = P.xMin - 2.6, xLandW = P.xMin - 4.4;
+  if (x >= xRampW && x <= P.xMax) return P.top;
+  if (x > P.xMax) return Math.max(0, P.top * (1 - (x - P.xMax) / P.rampLength));
+  if (x >= xLandE) return RAIL.railTop + (P.top - RAIL.railTop) * (x - xLandE) / (xRampW - xLandE);
+  if (x >= xLandW) return RAIL.railTop;
+  return 0;
+}
+
+/** Station interior stairs / accessible ramp from the concourse (0.15) up to platform 1 (1.55). */
+function stationFloorY(x, z) {
+  const B = STATION.building, T = PLATFORM.top, f = B.floorY;
+  // stairs: x -5.8..-2.4, z -21.3 (bottom) .. -24.0 (top)
+  if (x >= -5.8 && x <= -2.4 && z <= -21.3) return f + (T - f) * clamp((-21.3 - z) / 2.7, 0, 1);
+  // ramp lower leg: z -20.0..-21.2, x -6.3 -> -12.35 rising 0.15 -> 0.85
+  if (z <= -20.0 && z >= -21.2 && x <= -6.3 && x >= -12.35) return f + (0.85 - f) * clamp((-6.3 - x) / 6.05, 0, 1);
+  // west landing
+  if (x < -12.35 && x >= -13.75 && z <= -20.0 && z >= -23.75) return 0.85;
+  // ramp upper leg: z -22.45..-23.75, x -12.35 -> -7.55 rising 0.85 -> 1.55
+  if (z <= -22.45 && z >= -23.75 && x >= -12.35 && x <= -7.55) return 0.85 + (T - 0.85) * clamp((x + 12.35) / 4.8, 0, 1);
+  // top landing
+  if (z <= -22.45 && x > -7.55 && x < -5.8) return T;
+  return f;
+}
+
 /** Where the walking camera should stand (eye height added by the controls). */
 export function walkFloorY(x, z) {
-  // platforms
   const P = PLATFORM;
-  if (x > P.xMin && x < P.xMax) {
-    if (z < P.P1.zBack && z > P.P1.zTrack) return P.top;
-    if (z < P.P2.zTrack && z > P.P2.zBack) return P.top;
-  }
+  const onP1 = z < P.P1.zBack && z > P.P1.zTrack;
+  const onP2 = z < P.P2.zTrack && z > P.P2.zBack;
+  if ((onP1 || onP2) && x > P.xMin - 4.4 && x < P.xMax + P.rampLength) return platformY(x);
   const B = STATION.building;
-  if (x > B.xMin && x < B.xMax && z > B.zMin && z < B.zMax) return B.floorY;
-  return Math.max(groundY(x, z), isRiver(x, z) ? TERRAIN.waterLevel : -Infinity);
+  if (x > B.xMin && x < B.xMax && z > B.zMin && z < B.zMax) return stationFloorY(x, z);
+  return Math.max(surfaceY(x, z), isRiver(x, z) ? TERRAIN.waterLevel : -Infinity);
 }
 
 /** World bounds the walking camera is clamped to. */
@@ -944,5 +1006,5 @@ export const WALK_BOUNDS = { xMin: -140, xMax: 150, zMin: -104, zMax: 175 };
 export default {
   TERRAIN, RAIL, PLATFORM, STATION, MAIN_STREET, ROADS, ROAD_MARKINGS, CROSSING, TRAIN, PLAZA,
   LOTS, TREES, POLE_LINES, SPOTS, CAMERAS, WALK_BOUNDS, SHOP_TYPES,
-  groundY, isRiver, walkFloorY, lotById, lotsOfType, makeRng, hashString, clamp, lerp, smoothstep,
+  groundY, surfaceY, platformY, SURFACE_LIFT, isRiver, walkFloorY, lotById, lotsOfType, makeRng, hashString, clamp, lerp, smoothstep,
 };

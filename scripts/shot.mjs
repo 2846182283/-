@@ -34,7 +34,7 @@ if (opt('batch')) {
 const W = Number(opt('w', 1280));
 const H = Number(opt('h', 720));
 const extraWait = Number(opt('wait', 600));
-const timeout = Number(opt('timeout', 240000));
+const timeout = Number(opt('timeout', 600000)); // generous: software GL on a shared 4-core box can take >30 s per frame
 
 const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vite-shot-'));
 const server = await createServer({
@@ -77,8 +77,10 @@ try {
     await page.evaluate((n) => window.__waitFrames && window.__waitFrames(n), Number(job.frames || 3)).catch(() => {});
     await page.waitForTimeout(job.wait ?? extraWait);
     const stats = await page.evaluate(() => (window.__stats ? window.__stats() : null)).catch(() => null);
+    // freeze the render loop so capturing doesn't compete with new frames (drawing buffer is preserved in shot mode)
+    await page.evaluate(() => window.__stopLoop && window.__stopLoop()).catch(() => {});
     fs.mkdirSync(path.dirname(path.resolve(job.out)), { recursive: true });
-    await page.screenshot({ path: job.out, type: job.out.endsWith('.jpg') ? 'jpeg' : 'png', quality: job.out.endsWith('.jpg') ? 88 : undefined });
+    await page.screenshot({ path: job.out, type: job.out.endsWith('.jpg') ? 'jpeg' : 'png', quality: job.out.endsWith('.jpg') ? 88 : undefined, timeout });
     console.log(`\n=== ${job.out}  (${((Date.now() - t0) / 1000).toFixed(1)}s)  params: ${job.params || '(none)'}`);
     if (stats) {
       console.log(`stats: drawCalls=${stats.drawCalls} triangles=${stats.triangles} geometries=${stats.geometries} textures=${stats.textures} programs=${stats.programs} materials=${stats.materials}`);

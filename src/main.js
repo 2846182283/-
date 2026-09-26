@@ -67,6 +67,7 @@ async function main() {
   window.__app = { engine, ctx, THREE };
   window.__stats = () => ({ ...engine.stats(), buildTimes, errors });
   window.__waitFrames = (n) => engine.waitFrames(n);
+  window.__stopLoop = () => engine.stop();
 
   setLoad(0.03, '加载字体…');
   await ensureFonts(shotMode ? 6000 : 3500);

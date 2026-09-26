@@ -146,6 +146,12 @@ export function createEngine(canvas, params) {
     }
   }
 
+  /** Stop rendering (screenshot tool: freeze the last frame before capture). */
+  function stop() {
+    running = false;
+    renderer.setAnimationLoop(null);
+  }
+
   function start() {
     if (running) return;
     running = true;
@@ -170,5 +176,5 @@ export function createEngine(canvas, params) {
     };
   }
 
-  return { renderer, scene, camera, ctx, controls, post, lighting, sim, audio, start, resize, assignLayers, waitFrames, stats, quality, TOON_UNIFORMS };
+  return { renderer, scene, camera, ctx, controls, post, lighting, sim, audio, start, stop, resize, assignLayers, waitFrames, stats, quality, TOON_UNIFORMS };
 }

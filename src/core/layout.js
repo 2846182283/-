@@ -914,10 +914,14 @@ export const SPOTS = {
 // cameras
 // ---------------------------------------------------------------------------
 const heroTree = TREES.find((t) => t.hero);
-const heroZ = heroTree.z + 9.5;
-const heroX = MAIN_STREET.centerX(heroZ) + 0.9;
+const streetZ = heroTree.z + 9.5;
+const streetX = MAIN_STREET.centerX(streetZ) + 0.9;
+const heroZ = 24;
+const heroX = MAIN_STREET.centerX(heroZ) - 1.05;
 export const CAMERAS = {
-  hero: { pos: [heroX, groundY(heroX, heroZ) + 1.45, heroZ], look: [-4.5, 4.0, -24], fov: 45, label: '街道 · 望向车站' },
+  // key frame: café awning in the foreground, 止まれ + zebra leading to the station, grand sakura left, crossing right
+  hero: { pos: [heroX, groundY(heroX, heroZ) + 1.5, heroZ], look: [-2.6, 3.5, -22], fov: 44, label: '站前 · 望向车站' },
+  street: { pos: [streetX, groundY(streetX, streetZ) + 1.45, streetZ], look: [-4.5, 4.0, -24], fov: 45, label: '商店街' },
   plaza: { pos: [-3.5, 1.5, 1.5], look: [-8, 3.2, -20], fov: 55, label: '站前广场' },
   crossing: { pos: [36.5, 1.5, -10.5], look: [26, 2.2, -34], fov: 50, label: '道口' },
   platform: { pos: [15.5, PLATFORM.top + 1.5, -25.2], look: [-30, PLATFORM.top + 1.3, -30.5], fov: 55, label: '站台' },

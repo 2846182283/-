@@ -227,12 +227,12 @@ function postBox(kit) {
   kit.push(kit.mtx(p.x, s, p.z, 0, p.rotY));
   const red = '#d24a3c';
   kit.box(0.5, 0.1, 0.5, 0, 0, 0, 'vc', '#b9b6ae', { bottom: true });
-  kit.cyl(0.2, 0.21, 0.08, 0, 0.1, 0, 'vc', '#b33c30', { seg: 20 });
-  kit.cyl(0.2, 0.2, 1.02, 0, 0.18, 0, 'vc', red, { seg: 20 });
-  kit.cyl(0.212, 0.212, 0.04, 0, 1.02, 0, 'vc', '#b33c30', { seg: 20 }); // band under the cap
-  kit.sphere(0.215, 0, 1.2, 0, 'vc', red, { ws: 20, hs: 8, thetaLen: Math.PI / 2, sy: 0.55 });
-  kit.cyl(0.225, 0.225, 0.03, 0, 1.19, 0, 'vc', '#b33c30', { seg: 20 });
-  kit.sphere(0.035, 0, 1.33, 0, 'vc', red, { ws: 8, hs: 6 });
+  kit.cyl(0.2, 0.21, 0.08, 0, 0.1, 0, 'vc', '#b33c30', { seg: 32 });
+  kit.cyl(0.2, 0.2, 1.02, 0, 0.18, 0, 'vc', red, { seg: 32 });
+  kit.cyl(0.212, 0.212, 0.04, 0, 1.02, 0, 'vc', '#b33c30', { seg: 32 }); // band under the cap
+  kit.sphere(0.215, 0, 1.2, 0, 'vc', red, { ws: 32, hs: 12, thetaLen: Math.PI / 2, sy: 0.55 });
+  kit.cyl(0.225, 0.225, 0.03, 0, 1.19, 0, 'vc', '#b33c30', { seg: 32 });
+  kit.sphere(0.035, 0, 1.33, 0, 'vc', red, { ws: 12, hs: 8 });
   // two mail slots with little hoods
   for (const x of [-0.075, 0.075]) {
     kit.box(0.11, 0.028, 0.04, x, 0.96, 0.195, 'vc', '#2a2226', { no: true });

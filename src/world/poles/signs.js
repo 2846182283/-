@@ -162,67 +162,92 @@ function signYaw(spot) {
 }
 
 /**
- * Convex mirrors: orange post, round mirror with rim, back housing and a hood,
- * a painted fish-eye reflection on a slightly domed face, plate below.
+ * Convex mirrors (カーブミラー): orange post with reflective bands, a plate
+ * under the heads, and at T-junction corners TWO heads (二面鏡) on a short
+ * T-bar — one at the layout's rotY, the second turned ~110° toward the
+ * approach from the south — so both roads meeting at the corner are covered.
+ * Each head: back drum + domed back, rim, hood, and a painted fish-eye
+ * reflection on a slightly domed face.
  */
+const MIRROR_R = 0.3;
+const MIRROR_Y = 2.95;
+const SECOND_HEAD = 1.9; // yaw between the two heads (rad)
+
 export function buildMirrors(K, L) {
   const R = K.R;
   L.SPOTS.mirrors.forEach((m, i) => {
     const y0 = m.y ?? L.groundY(m.x, m.z);
-    const f = K.frame(mtx(m.x, y0, m.z, 0, m.rotY, 0));
-    const H = 3.1; // post top hidden behind the mirror head
+    // second head: whichever of rotY ± SECOND_HEAD faces more toward +Z (the main approach)
+    const yawB = Math.cos(m.rotY + SECOND_HEAD) > Math.cos(m.rotY - SECOND_HEAD) ? m.rotY + SECOND_HEAD : m.rotY - SECOND_HEAD;
+    const mid = (m.rotY + yawB) / 2; // bisector: the post frame faces between the heads
+    const half = (yawB - m.rotY) / 2;
+    const f = K.frame(mtx(m.x, y0, m.z, 0, mid, 0));
+    const H = MIRROR_Y + 0.12; // post top, just under the T-bar
     // post + foot + cap + reflective stripes
     f.cyl('vc', 0.07, 0.085, 0.06, '#a8a6a0', 0, -0.02, 0, 12);
     f.cyl('metal', 0.038, 0.038, H, ORANGE, 0, 0, 0, 12);
     const capG = K.proto('mirrorCap', () => new THREE.SphereGeometry(0.042, 12, 4, 0, Math.PI * 2, 0, Math.PI / 2));
     K.add('metalS', capG, ORANGE, f.m(0, H, 0));
     for (const yy of [0.75, 0.95]) f.cyl('vcS', 0.041, 0.041, 0.1, yy < 0.8 ? '#f2f4f6' : '#d8433d', 0, yy, 0, 12);
-    // plate under the mirror (faces the same way)
+    // plate under the heads (faces the bisector)
     const py = 2.2;
     f.box('metal', 0.42, 0.13, 0.012, '#f4f4f0', 0, py, 0.048);
     f.plane(R[`mplate${i % 2}`], 0.41, 0.12, 0, py, 0.0555, 0);
     for (const yy of [py + 0.04, py - 0.04]) f.cyl('metalS', 0.044, 0.044, 0.025, '#7f868d', 0, yy - 0.012, 0, 12);
-    // mirror head: bracket from the post top, mirror centred in front of the post
-    const my = 2.95, mz = 0.14, mr = 0.3;
-    f.box('metal', 0.05, 0.05, 0.16, ORANGE, 0, my + 0.05, 0.07);
-    f.box('metal', 0.05, 0.05, 0.16, ORANGE, 0, my - 0.12, 0.07);
-    f.cyl('metalS', 0.046, 0.046, 0.04, '#7f868d', 0, my + 0.03, 0, 12);
-    f.cyl('metalS', 0.046, 0.046, 0.04, '#7f868d', 0, my - 0.14, 0, 12);
-    // back housing (shallow drum + domed back)
-    const drum = K.proto('mirrorDrum', () => { const g = new THREE.CylinderGeometry(mr + 0.02, mr + 0.02, 0.07, 32); g.rotateX(Math.PI / 2); return g; });
-    K.add('metal', drum, ORANGE, f.m(0, my, mz));
-    const dome = K.proto('mirrorDome', () => {
-      const g = new THREE.SphereGeometry(mr + 0.02, 28, 6, 0, Math.PI * 2, 0, 0.9);
-      g.rotateX(-Math.PI / 2);
-      g.translate(0, 0, (mr + 0.02) * Math.cos(0.9)); // rim at z = 0, dome bulges toward -z
-      return g;
-    });
-    K.add('metal', dome, ORANGE, f.m(0, my, mz - 0.034, 0, 0, 0, 1, 1, 0.4));
-    // front rim
-    const rim = K.proto('mirrorRim', () => new THREE.TorusGeometry(mr + 0.005, 0.02, 6, 36));
-    K.add('metal', rim, ORANGE, f.m(0, my, mz + 0.04));
-    // convex face: low spherical cap, UVs projected onto the painted reflection
-    const face = K.proto('mirrorFace', () => {
-      const Rs = 1.1;
-      const a = Math.asin(mr / Rs);
-      const g = new THREE.SphereGeometry(Rs, 32, 6, 0, Math.PI * 2, 0, a);
-      g.rotateX(Math.PI / 2);
-      g.translate(0, 0, -Rs * Math.cos(a));
-      planarUV(g, R.mirror, -mr, mr, -mr, mr);
-      return g;
-    });
-    K.add('glow', face, '#fff', f.m(0, my, mz + 0.03));
-    // hood over the top half (double-sided thin shell)
-    const hood = K.proto('mirrorHood', () => {
-      const outer = new THREE.CylinderGeometry(mr + 0.035, mr + 0.035, 0.13, 20, 1, true, Math.PI / 2, Math.PI);
-      const inner = new THREE.CylinderGeometry(mr + 0.028, mr + 0.028, 0.13, 20, 1, true, Math.PI / 2, Math.PI);
-      flip(inner);
-      const g = K.ctx.geom.merge([outer, inner]);
-      g.rotateX(Math.PI / 2);
-      return g;
-    });
-    K.add('metal', hood, ORANGE, f.m(0, my, mz + 0.08));
+    // T-bar: two horizontal arms carrying the heads, clamped to the post
+    const armX = 0.4; // lateral offset of each head from the post
+    for (const yy of [MIRROR_Y + 0.05, MIRROR_Y - 0.12]) {
+      f.box('metal', armX * 2 - 0.1, 0.045, 0.045, ORANGE, 0, yy, 0.02);
+      f.cyl('metalS', 0.046, 0.046, 0.04, '#7f868d', 0, yy - 0.02, 0, 12);
+    }
+    // heads: the one for rotY sits on the side it turns toward
+    const sA = Math.sign(-half) || 1;
+    mirrorHead(K, R, f, sA * armX, 0.06, -half);
+    mirrorHead(K, R, f, -sA * armX, 0.06, half);
   });
+}
+
+/** One mirror head in the post frame: centre (lx, MIRROR_Y, lz), turned by yaw. */
+function mirrorHead(K, R, f, lx, lz, yaw) {
+  const hf = K.frame(f.m(lx, MIRROR_Y, lz, 0, yaw, 0));
+  const mr = MIRROR_R;
+  // bracket stubs from the T-bar into the back housing
+  hf.box('metal', 0.05, 0.05, 0.1, ORANGE, 0, 0.05, -0.08);
+  hf.box('metal', 0.05, 0.05, 0.1, ORANGE, 0, -0.12, -0.08);
+  // back housing (shallow drum + domed back)
+  const drum = K.proto('mirrorDrum', () => { const g = new THREE.CylinderGeometry(mr + 0.02, mr + 0.02, 0.07, 32); g.rotateX(Math.PI / 2); return g; });
+  K.add('metal', drum, ORANGE, hf.m(0, 0, 0));
+  const dome = K.proto('mirrorDome', () => {
+    const g = new THREE.SphereGeometry(mr + 0.02, 28, 6, 0, Math.PI * 2, 0, 0.9);
+    g.rotateX(-Math.PI / 2);
+    g.translate(0, 0, (mr + 0.02) * Math.cos(0.9)); // rim at z = 0, dome bulges toward -z
+    return g;
+  });
+  K.add('metal', dome, ORANGE, hf.m(0, 0, -0.034, 0, 0, 0, 1, 1, 0.4));
+  // front rim
+  const rim = K.proto('mirrorRim', () => new THREE.TorusGeometry(mr + 0.005, 0.02, 6, 36));
+  K.add('metal', rim, ORANGE, hf.m(0, 0, 0.04));
+  // convex face: low spherical cap, UVs projected onto the painted reflection
+  const face = K.proto('mirrorFace', () => {
+    const Rs = 1.1;
+    const a = Math.asin(mr / Rs);
+    const g = new THREE.SphereGeometry(Rs, 32, 6, 0, Math.PI * 2, 0, a);
+    g.rotateX(Math.PI / 2);
+    g.translate(0, 0, -Rs * Math.cos(a));
+    planarUV(g, R.mirror, -mr, mr, -mr, mr);
+    return g;
+  });
+  K.add('glow', face, '#fff', hf.m(0, 0, 0.03));
+  // hood over the top half (double-sided thin shell)
+  const hood = K.proto('mirrorHood', () => {
+    const outer = new THREE.CylinderGeometry(mr + 0.035, mr + 0.035, 0.13, 20, 1, true, Math.PI / 2, Math.PI);
+    const inner = new THREE.CylinderGeometry(mr + 0.028, mr + 0.028, 0.13, 20, 1, true, Math.PI / 2, Math.PI);
+    flip(inner);
+    const g = K.ctx.geom.merge([outer, inner]);
+    g.rotateX(Math.PI / 2);
+    return g;
+  });
+  K.add('metal', hood, ORANGE, hf.m(0, 0, 0.08));
 }
 
 /** Reverse winding + normals (inner surface of a shell). */

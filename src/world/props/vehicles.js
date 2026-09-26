@@ -12,7 +12,7 @@
  * seats + dashboard + steering wheel inside so the glass has something to show.
  */
 import * as THREE from 'three';
-import { SPOTS, groundY } from '../../core/layout.js';
+import { SPOTS, ROADS, ROAD_MARKINGS, groundY } from '../../core/layout.js';
 import { surfaceY } from './common.js';
 
 /** Side-profile shape (z forward -> shape x, y up) with semicircular wheel arches cut into the bottom edge. */
@@ -220,8 +220,24 @@ export function vehicle(kit, kind) {
   return sp;
 }
 
+/**
+ * The layout spot for the waiting kei car sits on the south (westbound) half of
+ * the north road, which reads as driving on the wrong side.  Keep its intent
+ * ("waiting north of the crossing") but put it where a Japanese driver would
+ * actually wait: southbound on the crossing road (keep left = east half), nose
+ * just behind the north stop line.
+ */
+function waitingSpot(spot) {
+  const cr = ROADS.crossingRoad;
+  const stop = ROAD_MARKINGS.find((m) => m.street === 'crossing' && m.type === 'stopLine' && m.lateral > 0);
+  const x = cr.x + (stop ? stop.lateral : 1.35);
+  const z = (stop ? stop.z : -42) - 0.35 - 3.4 / 2;
+  return { ...spot, x, z, y: groundY(x, z), rotY: 0 };
+}
+
 export function buildVehicles(kit, clusterOf) {
-  for (const v of SPOTS.vehicles) {
+  for (const spot of SPOTS.vehicles) {
+    const v = spot.kind === 'kei-car-waiting-at-crossing' ? waitingSpot(spot) : spot;
     kit.cluster(clusterOf(v));
     const sp = SPECS[v.kind] ? SPECS[v.kind]() : SPECS['kei-car']();
     const s = surfaceY(v.x, v.z, v.y);

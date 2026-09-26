@@ -22,9 +22,6 @@ import { recipes } from './recipes.js';
 import { vnoise } from './rig.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
-const PLAZA_Y = 0.07; // terrain paving lift (terrain/common.js LIFT.plaza)
-const ROAD_LIFT = 0.03;
-const APRON_LIFT = 0.075;
 
 // scratch objects for per-frame work (no allocations in updates)
 const _t = new THREE.Vector3();
@@ -32,6 +29,7 @@ const _t2 = new THREE.Vector3();
 const _pole = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 const _axis = new THREE.Vector3();
+const _look = { yaw: 0, pitch: 0 };
 
 /** A placed character with helpers for world <-> local work. */
 class Actor {
@@ -78,7 +76,9 @@ class Actor {
     _t.applyQuaternion(_q.copy(this.o.quaternion).invert());
     const yaw = THREE.MathUtils.clamp(Math.atan2(_t.x, _t.z), -maxYaw, maxYaw) * weight;
     const pitch = THREE.MathUtils.clamp(-Math.atan2(_t.y, Math.hypot(_t.x, _t.z)), -0.6, 0.7) * weight;
-    return { yaw, pitch };
+    _look.yaw = yaw;
+    _look.pitch = pitch;
+    return _look; // shared scratch: read it immediately
   }
 }
 
@@ -89,7 +89,7 @@ function breathe(a, t, seed, extraX = 0, extraY = 0, extraZ = 0) {
 
 export function buildCast(ctx, shared) {
   const { layout, sim } = ctx;
-  const { SPOTS, PLATFORM, STATION, PLAZA, MAIN_STREET, LOTS, groundY } = layout;
+  const { SPOTS, PLATFORM, STATION, PLAZA, MAIN_STREET, LOTS, surfaceY } = layout;
   const R = recipes(shared.rects);
   const group = new THREE.Group();
   group.name = 'cast';
@@ -146,7 +146,7 @@ export function buildCast(ctx, shared) {
   // ---- 2. crossing girl with her bike ------------------------------------------
   {
     const s = SPOTS.people.crossingGirlWithBike;
-    const y = groundY(s.x, s.z) + 0.02;
+    const y = surfaceY(s.x, s.z) + 0.005;
     const look = V(), grip = V();
     let yawS = 0;
     add(R.crossingGirl, s.x, y, s.z, s.rotY, (a) => {
@@ -181,7 +181,7 @@ export function buildCast(ctx, shared) {
     const vm = SPOTS.vending.find((v) => v.id === 'V1');
     const z = vm ? vm.z + 1.1 : s.z;
     const tgt = V();
-    add(R.vendingBoy, s.x + 0.05, PLAZA_Y, z, s.rotY, (a) => {
+    add(R.vendingBoy, s.x + 0.05, surfaceY(s.x, z), z, s.rotY, (a) => {
       a.p.set('spine', 0.06, 0, 0).set('chest', 0.04, 0.05, 0);
       a.p.set('upperArm_L', 0.1, 0, -0.03).set('foreArm_L', -0.2, 0, 0);
       a.p.set('thigh_R', -0.08, 0, -0.02).set('shin_R', 0.12, 0, 0).set('foot_R', -0.04, -0.2, 0);
@@ -249,14 +249,14 @@ export function buildCast(ctx, shared) {
       const pw = cafe.toWorld(pl.x, pl.z);
       const bw = cafe.toWorld(bl.x + fx * 0.14, bl.z + fz * 0.14); // board face centre (world xz)
       const rotY = Math.atan2(bw.x - pw.x, bw.z - pw.z) + 0.25;
-      const y = groundY(pw.x, pw.z) + APRON_LIFT;
+      const y = surfaceY(pw.x, pw.z);
       const pen = V(), rightW = V(), frontW = V();
       // board frame in world space (for the writing loop)
       const rot = cafe.rotY + by;
       rightW.set(Math.cos(rot), 0, -Math.sin(rot));
       frontW.set(Math.sin(rot), 0, Math.cos(rot));
       const board = cafe.toWorld(bl.x, bl.z);
-      const gy = groundY(board.x, board.z) + APRON_LIFT;
+      const gy = surfaceY(board.x, board.z);
       add(R.cafeClerk, pw.x, y, pw.z, rotY, (a) => {
         a.p.set('spine', 0.16, 0, 0).set('chest', 0.1, -0.1, 0).set('hips', 0, 0, 0.03);
         a.p.set('thigh_L', -0.12, 0, 0.03).set('shin_L', 0.2, 0, 0).set('foot_L', -0.08, 0, 0);
@@ -281,7 +281,7 @@ export function buildCast(ctx, shared) {
   // ---- 6. old lady with shopping bags ------------------------------------------------------
   {
     const s = SPOTS.people.oldLadyWithBags;
-    const y = groundY(s.x, s.z) + ROAD_LIFT;
+    const y = surfaceY(s.x, s.z);
     const tree = V(s.x - 2.5, y + 5.5, s.z - 4);
     add(R.oldLady, s.x, y, s.z, -0.35, (a) => {
       const P = a.P;
@@ -308,7 +308,7 @@ export function buildCast(ctx, shared) {
     const c = Math.cos(rotY), sn = Math.sin(rotY);
     const blow = { x: wx * c - wz * sn, z: wx * sn + wz * c };
     const hairHand = V(), skirtHand = V();
-    add(R.windGirl(blow), s.x, PLAZA_Y, s.z, rotY, (a) => {
+    add(R.windGirl(blow), s.x, surfaceY(s.x, s.z), s.z, rotY, (a) => {
       a.p.set('hips', 0, 0.05, -0.03).set('chest', -0.04, -0.12, 0.03).set('head', 0.02, -0.25, 0.12);
       a.p.set('thigh_R', -0.1, 0, -0.03).set('shin_R', 0.18, 0, 0).set('foot_R', -0.08, 0, 0);
     }, (a, t) => {
@@ -371,14 +371,18 @@ export function buildCast(ctx, shared) {
   // ---- 11. salaryman at the ticket machines ----------------------------------------------------
   {
     const touch = V();
-    add(R.salaryman, -9.75, STATION.building.floorY, -18.42, Math.PI, (a) => {
+    // ticket machine (station/interior.js): x -9.8, front face z -19.125, tilted
+    // touch screen centred ~1.28 m above the concourse floor
+    const FY = STATION.building.floorY;
+    add(R.salaryman, -9.72, FY, -18.6, Math.PI, (a) => {
       a.p.set('spine', 0.05, 0, 0).set('thigh_L', -0.04, 0, 0).set('shin_L', 0.1, 0, 0);
     }, (a, t) => {
       breathe(a, t, 11);
       const k = (t % 6) / 6;
-      const press = Math.sin(Math.min(1, k * 3) * Math.PI) * 0.03;
+      const press = Math.sin(Math.min(1, k * 3) * Math.PI) * 0.025;
       const col = Math.floor(t / 6) % 3;
-      touch.set(-9.84 + col * 0.08, 1.18 - (col === 1 ? 0.08 : 0), -18.86 - press);
+      const ty = FY + 1.24 + (col === 1 ? 0.08 : 0);
+      touch.set(-9.9 + col * 0.12, ty, -19.02 - (ty - FY - 1.28) * 0.37 + 0.03 - press);
       a.arm('R', touch, -1, -0.7, -0.3);
       const h = a.headToward(touch, 0.6);
       a.p.delta('head', h.pitch * 0.9, h.yaw * 0.8, 0);
@@ -393,6 +397,17 @@ export function buildCast(ctx, shared) {
     const off = -2.55;
     const hand = V();
     let stride = 0;
+    // path table (x, y, z, yaw every 0.25 m), sampled once so the update never allocates
+    const STEP = 0.25;
+    const nPath = Math.ceil(len / STEP) + 2;
+    const path = new Float32Array(nPath * 4);
+    for (let i = 0; i < nPath; i++) {
+      const p = MAIN_STREET.offsetAtS(s0 - Math.min(len, i * STEP), off);
+      path[i * 4] = p.x;
+      path[i * 4 + 1] = surfaceY(p.x, p.z);
+      path[i * 4 + 2] = p.z;
+      path[i * 4 + 3] = Math.atan2(-p.frame.tx, -p.frame.tz);
+    }
     add(R.walker, 0, 0, 60, 0, (a) => {
       a.p.set('spine', 0.12, 0, 0).set('chest', 0.05, 0, 0).set('neck', -0.05, 0, 0).set('head', -0.08, 0, 0);
       // hands clasped behind the back
@@ -403,12 +418,15 @@ export function buildCast(ctx, shared) {
       stride = 0.5;
     }, (a, t) => {
       const d = (t * speed + 34) % len; // phase: in front of the hero camera at t = 0
-      const s = s0 - d;
-      const p = MAIN_STREET.offsetAtS(s, off);
-      const f = p.frame;
+      const fi = d / STEP, i = Math.min(nPath - 2, Math.floor(fi)), k = fi - i;
+      const j = i * 4;
       const ph = (t * speed / stride) * Math.PI; // one step per stride length
-      a.o.position.set(p.x, p.y + ROAD_LIFT + 0.01 * Math.cos(2 * ph), p.z);
-      a.o.rotation.y = Math.atan2(-f.tx, -f.tz);
+      a.o.position.set(
+        path[j] + (path[j + 4] - path[j]) * k,
+        path[j + 1] + (path[j + 5] - path[j + 1]) * k + 0.01 * Math.cos(2 * ph),
+        path[j + 2] + (path[j + 6] - path[j + 2]) * k,
+      );
+      a.o.rotation.y = path[j + 3] + (path[j + 7] - path[j + 3]) * k;
       const sw = Math.sin(ph), cw = Math.cos(ph);
       a.p.delta('thigh_L', -0.3 * sw, 0, 0);
       a.p.delta('thigh_R', 0.3 * sw, 0, 0);
@@ -429,9 +447,10 @@ export function buildCast(ctx, shared) {
     const mRot = Math.atan2(gt.x - mx, gt.z - mz);
     const left = V(Math.cos(mRot), 0, -Math.sin(mRot)); // character +X in world
     const cx = mx + left.x * 0.55, cz = mz + left.z * 0.55;
-    const clasp = V((mx + cx) / 2, PLAZA_Y + 0.66, (mz + cz) / 2);
+    const PY = surfaceY(mx, mz);
+    const clasp = V((mx + cx) / 2, PY + 0.66, (mz + cz) / 2);
     const canopy = V(gt.x, 5.5, gt.z);
-    add(R.mother, mx, PLAZA_Y, mz, mRot - 0.15, (a) => {
+    add(R.mother, mx, PY, mz, mRot - 0.15, (a) => {
       a.p.set('hips', 0, 0, -0.03).set('thigh_R', -0.06, 0, 0).set('shin_R', 0.12, 0, 0).set('foot_R', -0.06, 0, 0);
       a.arm('L', clasp, 1, 0, -0.5);
       a.p.set('upperArm_R', 0, 0, 0.05).set('foreArm_R', -0.35, 0, 0);
@@ -441,8 +460,8 @@ export function buildCast(ctx, shared) {
       a.p.delta('head', h.pitch + 0.1, h.yaw + 0.25 + vnoise(t * 0.15, 14) * 0.1, 0.06);
     });
     const point = V(), sh = V();
-    let baseY = PLAZA_Y;
-    add(R.child, cx, PLAZA_Y, cz, mRot + 0.25, (a) => {
+    let baseY = PY;
+    add(R.child, cx, PY, cz, mRot + 0.25, (a) => {
       a.arm('R', clasp, -1, 0, -0.5);
       baseY = a.o.position.y;
     }, (a, t) => {

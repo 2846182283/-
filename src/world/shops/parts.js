@@ -412,6 +412,22 @@ export function pottedPlant(S, x, y, z, s = 1, o = {}) {
   B.cyl(kind, x, y + ph - 0.03 * s, z, pr * 1.08, 0.04 * s, o.pot || '#b86f4f', { seg: 10 });
   const green = o.green || '#6f9e58';
   const n = o.blobs || 4;
+  if (o.tree) {
+    // standard tree (olive / ficus): thin trunk + an open crown of small leaf clumps
+    const trunkH = o.tree * s;
+    B.tube(kind, [[x, y + ph - 0.02, z], [x + 0.02 * s, y + ph + trunkH * 0.5, z], [x - 0.01 * s, y + ph + trunkH, z]], 0.018 * s, o.trunk || '#7a6048', { radial: 5 });
+    const cy = y + ph + trunkH, cr = 0.2 * s;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + rng() * 0.6;
+      const up = (i % 3) / 2 - 0.4;
+      const rr = cr * (0.35 + rng() * 0.25);
+      const px = x + Math.cos(a) * cr * 0.75, pz = z + Math.sin(a) * cr * 0.75, py = cy + up * cr;
+      B.beam(kind, [x, cy - cr * 0.4, z], [px, py, pz], 0.012 * s, 0.012 * s, o.trunk || '#7a6048');
+      B.sphere(kind, px, py, pz, rr, [green, shadeHex(green, -0.07), shadeHex(green, 0.05)][i % 3], { ico: 1, sy: 0.8 });
+    }
+    B.sphere(kind, x, cy + cr * 0.35, z, cr * 0.45, shadeHex(green, 0.04), { ico: 1, sy: 0.85 });
+    return;
+  }
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2 + rng();
     const rr = 0.08 * s + rng() * 0.05 * s;

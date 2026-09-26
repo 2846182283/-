@@ -147,7 +147,7 @@ function doors(S, F, Z) {
 function interior(S, F, Z) {
   const { B, A, W, D } = S;
   const zb = -D / 2 + 0.2, zf = Z - 0.2, ceil = F + 2.95;
-  room(S, -W / 2 + 0.25, W / 2 - 0.25, zb, zf, F, ceil, { floor: '#eaeae6', wall: '#f6f6f4', back: '#f2f2f0', ceil: '#fafaf8', skirt: '#c8c8c4' });
+  room(S, -W / 2 + 0.25, W / 2 - 0.25, zb, zf, F, ceil, { floor: '#d6d6d0', wall: '#e2e2de', back: '#dcdcd8', ceil: '#e6e6e2', skirt: '#b0b0aa' });
   // fridges along the back wall (glowing doors)
   B.box('inner', -7.2, F, zb, 3.0, F + 2.2, zb + 0.75, '#e2e6ea');
   for (let i = 0; i < 4; i++) B.quad('lit', -6.0 + i * 2.55, F + 1.05, zb + 0.76, 2.5, 1.95, '#ffffff', A.get('kFridge'));

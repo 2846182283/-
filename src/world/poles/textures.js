@@ -582,7 +582,7 @@ function drawTransLabel(c, w, h) {
 
 function drawLampLens(c, w, h) {
   const g = c.createLinearGradient(0, 0, 0, h);
-  g.addColorStop(0, '#fffaf0'); g.addColorStop(1, '#f1e8d6');
+  g.addColorStop(0, '#fffbef'); g.addColorStop(1, '#ffe7b8'); // warm, faintly lit
   c.fillStyle = g; c.fillRect(0, 0, w, h);
   c.fillStyle = 'rgba(255,255,255,0.8)';
   c.fillRect(w * 0.1, h * 0.3, w * 0.8, h * 0.12);

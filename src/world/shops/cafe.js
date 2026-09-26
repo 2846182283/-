@@ -50,7 +50,7 @@ export function buildCafe(S) {
 function storefront(S, F, Z) {
   const { B, A } = S;
   const zf = Z - 0.1; // frame plane
-  const top = F + 2.62, head = F + 2.2, sill = F + 0.72;
+  const top = F + 2.62, head = F + 2.2, sill = F + 0.5;
   // outer frame & head rail
   B.box('solid', -4.15, top - 0.08, zf - 0.07, 4.15, top, zf + 0.07, WOOD);
   B.box('solid', -4.15, head - 0.05, zf - 0.07, 4.15, head + 0.05, zf + 0.07, WOOD);
@@ -147,7 +147,7 @@ function interior(S, F, Z, H1) {
   for (const px of [-3.0, -1.8, -0.6]) pendant(S, px, ceil, zb + 0.9, 0.7, { style: 'bulb' });
   pendant(S, 2.6, ceil, zb + 0.7, 0.9, { style: 'cone', shade: '#e8e0cc' });
   // plants
-  pottedPlant(S, -4.0, F, Z - 2.6, 1.8, { kind: 'inner', tall: 2.2, blobs: 6, pot: '#e8e0d0' });
+  pottedPlant(S, -4.0, F, Z - 2.6, 1.8, { kind: 'inner', tree: 0.7, blobs: 8, pot: '#e8e0d0', green: '#6f9e58' });
   pottedPlant(S, 4.0, F, Z - 0.6, 1.3, { kind: 'inner', tall: 1.6, pot: '#b86f4f' });
   // ceiling fan hint: a wooden beam across
   B.box('inner', -4.3, ceil - 0.18, Z - 2.4, 4.3, ceil, Z - 2.2, '#6a4a34');
@@ -204,6 +204,6 @@ function outdoor(S, F, Z) {
   // chalkboard A-frame by the door, angled toward the station road
   aFrame(S, 3.45, S.gy(3.45, Z + 0.85), Z + 0.85, 0.45, A.get('cBoard'), A.get('cBoardB'), { h: 1.0, w: 0.56 });
   // potted olive by the door
-  pottedPlant(S, 1.85, S.gy(1.85, Z + 0.3), Z + 0.3, 1.9, { pot: '#d8cfc0', tall: 1.8, blobs: 6, green: '#8aa878' });
+  pottedPlant(S, 1.85, S.gy(1.85, Z + 0.3), Z + 0.3, 1.9, { pot: '#d8cfc0', tree: 0.62, blobs: 9, green: '#8aa878' });
   pottedPlant(S, -4.45, S.gy(-4.45, Z + 0.3), Z + 0.3, 1.4, { pot: '#b86f4f', flowers: ['#f7b6c8', '#fff'], nf: 8 });
 }

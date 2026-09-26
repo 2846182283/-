@@ -57,7 +57,6 @@ const C = {
   concrete: '#b6b4ad',
   concreteDark: '#9d9b94',
   lampHousing: '#e9ebea',
-  lampLens: '#fff3d6',
   camera: '#f1f1ec',
   yellow: '#f2c230',
   plate: '#e9e9e4',
@@ -365,11 +364,12 @@ export function buildPole(K, P) {
       const g = K.proto('lampOval', () => new THREE.SphereGeometry(0.5, 16, 8));
       K.add('metal', g, C.lampHousing, f.m(hx, hy, 0, 0, 0, 0, 0.6, 0.2, 0.34));
       const lens = K.proto('lampOvalLens', () => new THREE.SphereGeometry(0.5, 16, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2));
-      K.add('vcS', lens, C.lampLens, f.m(hx, hy - 0.005, 0, 0, 0, 0, 0.5, 0.25, 0.26));
+      // lens: unlit warm cream so the lamp reads as a soft light source (no outline)
+      K.add('glow', regionUV(lens, R.lens), '#fff', f.m(hx, hy - 0.005, 0, 0, 0, 0, 0.5, 0.25, 0.26));
     } else {
       const g = K.proto('lampLong', () => new THREE.CapsuleGeometry(0.1, 0.46, 6, 14));
       K.add('metal', g, C.lampHousing, f.m(hx + rs * 0.04, hy, 0, 0, 0, Math.PI / 2, 0.42, 1, 1.15));
-      f.box('vcS', 0.5, 0.02, 0.15, C.lampLens, hx + rs * 0.04, hy - 0.04, 0);
+      K.add('glow', regionUV(new THREE.BoxGeometry(0.5, 0.02, 0.15), R.lens), '#fff', f.m(hx + rs * 0.04, hy - 0.04, 0));
     }
     f.cyl('vcS', 0.025, 0.025, 0.035, '#f7f7f4', hx - rs * 0.12, hy + 0.05, 0, 8); // photo sensor
     lamp = f.p(hx, hy - 0.06, 0);

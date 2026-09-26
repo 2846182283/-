@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
-import { CAMERAS, walkFloorY, WALK_BOUNDS, LOTS, STATION } from './layout.js';
+import { CAMERAS, walkFloorY, WALK_BOUNDS, LOTS, STATION, RIVER_BLOCK, onBridge, BRIDGE } from './layout.js';
 
 const EYE = 1.52;
 
@@ -129,6 +129,14 @@ export function createControls(camera, dom, { onModeChange } = {}) {
         const dl = p.x - (b.minX - r), dr = b.maxX + r - p.x, dd = p.z - (b.minZ - r), du = b.maxZ + r - p.z;
         const m = Math.min(dl, dr, dd, du);
         if (m === dl) p.x = b.minX - r; else if (m === dr) p.x = b.maxX + r; else if (m === dd) p.z = b.minZ - r; else p.z = b.maxZ + r;
+      }
+    }
+    // the river can only be crossed on the bridge
+    if (p.z < RIVER_BLOCK.zSouth && p.z > RIVER_BLOCK.zNorth && !onBridge(p.x, p.z)) {
+      if (Math.abs(p.x - BRIDGE.x) < BRIDGE.halfWidth + 0.6 && p.z < BRIDGE.zSouth && p.z > BRIDGE.zNorth) {
+        p.x = BRIDGE.x + Math.sign(p.x - BRIDGE.x) * (BRIDGE.halfWidth - 0.05);
+      } else {
+        p.z = p.z - RIVER_BLOCK.zNorth < RIVER_BLOCK.zSouth - p.z ? RIVER_BLOCK.zNorth : RIVER_BLOCK.zSouth;
       }
     }
     p.x = THREE.MathUtils.clamp(p.x, WALK_BOUNDS.xMin, WALK_BOUNDS.xMax);

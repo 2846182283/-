@@ -12,7 +12,7 @@ export const SUN = {
   // direction TOWARD the sun (world space).  Override with ?sun=azimuthDeg,elevationDeg
   dir: new THREE.Vector3(-0.62, 0.5, -0.6).normalize(),
   color: new THREE.Color('#ffe7c9'),
-  intensity: 2.9,
+  intensity: 2.7,
 };
 
 export function setSunAngles(azDeg, elDeg) {
@@ -26,7 +26,7 @@ export function createLighting(scene, renderer, quality = 'high') {
   const group = new THREE.Group();
   group.name = 'lighting';
 
-  const hemi = new THREE.HemisphereLight('#d3e3ff', '#dccbc6', 2.15);
+  const hemi = new THREE.HemisphereLight('#d3e3ff', '#dccbc6', 2.0);
   hemi.position.set(0, 1, 0);
   group.add(hemi);
 

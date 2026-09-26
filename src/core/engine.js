@@ -10,7 +10,7 @@ import tex, { setMaxAnisotropy } from './canvasTex.js';
 import { PALETTE } from './palette.js';
 import { createSim } from './sim.js';
 import { createLighting, SUN, setSunAngles } from './lighting.js';
-import { createPostFX, OUTLINE_LAYER } from './postfx.js';
+import { createPostFX, OUTLINE_LAYER, MASK_LAYER } from './postfx.js';
 import { createControls } from './controls.js';
 import { createAudio } from './audio.js';
 
@@ -97,17 +97,29 @@ export function createEngine(canvas, params) {
   /** Put outline-able meshes on the outline layer; call after modules add content. */
   function assignLayers(root = scene) {
     const list = [];
+    const masks = [];
     root.traverse((o) => {
       if (!(o.isMesh || o.isInstancedMesh)) return;
       const m = o.material;
       const transparent = Array.isArray(m) ? false : (m.transparent || m.userData?.isGlass);
-      if (o.userData.noOutline || transparent) o.layers.disable(OUTLINE_LAYER);
-      else {
+      o.layers.disable(MASK_LAYER);
+      if (o.userData.noOutline || transparent) {
+        o.layers.disable(OUTLINE_LAYER);
+        // opaque, non-cutout, non-custom-shader objects still hide the outlines of things behind them
+        const maskable = !Array.isArray(m) && !transparent && !m.isShaderMaterial && !(m.alphaTest > 0) && m.depthWrite !== false && !o.userData.noMask;
+        if (maskable) {
+          o.layers.enable(MASK_LAYER);
+          masks.push(o);
+        }
+      } else {
         o.layers.enable(OUTLINE_LAYER);
         list.push(o);
       }
     });
-    if (root === scene) post.setOutlineMeshes(list);
+    if (root === scene) {
+      post.setOutlineMeshes(list);
+      post.setMaskMeshes(masks);
+    }
   }
 
   const timer = new THREE.Timer();

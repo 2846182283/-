@@ -278,9 +278,29 @@ export const ROADS = {
   crossingRoad: { axis: 'z', x: 32, from: -49.5, to: 7.5, halfWidth: 2.75, centerLine: 'none', edgeLine: 2.65, shoulder: 2.75, gutter: [2.75, 3.1] },
   northRoad: { axis: 'x', z: -47, from: -150, to: 120, halfWidth: 2.5, centerLine: 'none', edgeLine: 2.4, shoulder: 2.5, gutter: [2.5, 2.85] },
   leveePath: { axis: 'x', z: -70, from: -200, to: 200, halfWidth: 1.6, surface: 'gravel' },
+  /**
+   * Narrow residential lanes (路地) that fill the blocks behind the frontage with simple houses
+   * (layout lots with filler: true).  Plain faded asphalt, white edge lines at most, no centre line.
+   */
+  lanes: [
+    { id: 'LE1', axis: 'x', z: 44, from: 38, to: 146, halfWidth: 1.8 },
+    { id: 'LE2', axis: 'x', z: 78, from: 39, to: 146, halfWidth: 1.8 },
+    { id: 'LE3', axis: 'x', z: 112, from: 37, to: 146, halfWidth: 1.8 },
+    { id: 'LW1', axis: 'x', z: 44, from: -140, to: -40, halfWidth: 1.8 },
+    { id: 'LW2', axis: 'x', z: 78, from: -140, to: -43, halfWidth: 1.8 },
+    { id: 'LW3', axis: 'x', z: 112, from: -140, to: -43, halfWidth: 1.8 },
+    { id: 'LNE', axis: 'x', z: -12.8, from: 38, to: 146, halfWidth: 1.6, oneSide: 'north' },
+    { id: 'LNW', axis: 'x', z: -12.8, from: -140, to: -34, halfWidth: 1.6, oneSide: 'north' },
+  ],
 };
 
 // Road markings the terrain module should paint (all world-space, text reads toward the approaching driver)
+/**
+ * Small concrete road/foot bridge over the river (terrain.js builds it): deck spans from the
+ * levee-top path to the far levee, walkable.
+ */
+export const BRIDGE = { x: 58, halfWidth: 2.4, zSouth: -71.5, zNorth: -98.5, deckY: 3.05, railH: 1.1 };
+
 /**
  * Road markings for terrain.js to paint.
  *   street: 'main' (position by z along the curve, `lateral` = signed offset from the centreline, + = east)
@@ -685,6 +705,53 @@ function cornerXs(lot) {
 }
 
 export const LOTS = buildLots();
+
+// Filler lots along the residential lanes (simple houses; built by houses.js as cheap 'simple' lots).
+{
+  const keepOut = [
+    { x: -46.5, z: -18.5, r: 4 }, // shrine
+    { x: 38.0, z: -21.6, r: 5 }, { x: -62, z: -21.5, r: 5 }, { x: -78, z: -21.8, r: 4.5 }, { x: -20.5, z: -20.0, r: 4.5 },
+  ];
+  let n = 0;
+  for (const lane of ROADS.lanes) {
+    const sides = lane.oneSide === 'north' ? [-1] : [-1, 1]; // -1 = north side (lot fronts face south)
+    for (const side of sides) {
+      let x = lane.from + 1.5;
+      let i = 0;
+      while (true) {
+        const h = hashString(`fill-${lane.id}-${side}-${i}`);
+        const w = 8 + (h % 25) / 10;
+        const d = lane.oneSide ? 8.2 : 9 + ((h >>> 5) % 12) / 10;
+        if (x + w > lane.to - 1) break;
+        const cx = x + w / 2;
+        const cz = lane.z + side * (lane.halfWidth + 0.6 + d / 2);
+        const blocked = keepOut.some((k) => Math.abs(k.x - cx) < w / 2 + k.r && Math.abs(k.z - cz) < d / 2 + k.r);
+        const vacant = (h >>> 9) % 10 < 2; // some empty plots: gardens, parking, fields
+        if (!blocked && !vacant) {
+          const id = `F${lane.id}${side < 0 ? 'N' : 'S'}${String(i).padStart(2, '0')}`;
+          const facing = side < 0 ? 'south' : 'north';
+          const dir = facing === 'south' ? [0, 1] : [0, -1];
+          const rotY = Math.atan2(dir[0], dir[1]);
+          const fx = cx, fz = cz + dir[1] * d / 2;
+          const lot = {
+            id, street: lane.id, side: 0, x: cx, z: cz, y: groundY(fx, fz), rotY, width: w, depth: d,
+            floors: (h >>> 13) % 5 === 0 ? 1 : 2, type: 'house', simple: true, filler: true, setback: 0.6,
+            seed: hashString(id), front: { x: fx, z: fz, dirX: dir[0], dirZ: dir[1] },
+          };
+          const c = Math.cos(rotY), sn = Math.sin(rotY);
+          lot.toWorld = (lx, lz) => ({ x: lot.x + lx * c + lz * sn, z: lot.z - lx * sn + lz * c });
+          const fl = lot.toWorld(-w * 0.3, d / 2);
+          lot.drop = { x: fl.x, y: lot.y + (lot.floors === 1 ? 3.0 : 5.4), z: fl.z };
+          lot.corners = [lot.toWorld(-w / 2, -d / 2), lot.toWorld(w / 2, -d / 2), lot.toWorld(w / 2, d / 2), lot.toWorld(-w / 2, d / 2)];
+          LOTS.push(lot);
+          n++;
+        }
+        x += w + 1.2 + ((h >>> 17) % 15) / 10;
+        i++;
+      }
+    }
+  }
+}
 export const lotById = (id) => LOTS.find((l) => l.id === id);
 export const lotsOfType = (type) => LOTS.filter((l) => l.type === type);
 export const SHOP_TYPES = ['cafe', 'flower', 'books', 'bicycle', 'konbini', 'wagashi', 'zakka', 'ramen', 'tabako'];
@@ -735,7 +802,9 @@ function buildTrees() {
   for (let x = -260; x <= 260; x += 16) add(x + ((hashString(`fb${x}`) % 60) / 10), -99.5, 'row', { scale: 0.8 });
   for (let i = 0; i < 40; i++) {
     const hx = -300 + (hashString(`hx${i}`) % 600);
-    const hz = -120 - (hashString(`hz${i}`) % 160);
+    // between the far-town lanes (sky.js: lanes at farLeveeTopNorth - 40 - k*22 with houses at ±6 m)
+    const lane = hashString(`hz${i}`) % 10;
+    const hz = TERRAIN.farLeveeTopNorth - 40 - lane * 22 - 11 - ((hashString(`hzj${i}`) % 30) / 10 - 1.5);
     add(hx, hz, 'small', { scale: 1.2 + (hashString(`hs${i}`) % 10) / 10, far: true });
   }
   return T;
@@ -924,7 +993,7 @@ export const CAMERAS = {
   hero: { pos: [heroX, groundY(heroX, heroZ) + 1.5, heroZ], look: [-2.6, 3.5, -22], fov: 44, label: '站前 · 望向车站' },
   street: { pos: [streetX, groundY(streetX, streetZ) + 1.45, streetZ], look: [-4.5, 4.0, -24], fov: 45, label: '商店街' },
   plaza: { pos: [-3.5, 1.5, 1.5], look: [-8, 3.2, -20], fov: 55, label: '站前广场' },
-  crossing: { pos: [36.5, 1.5, -10.5], look: [26, 2.2, -34], fov: 50, label: '道口' },
+  crossing: { pos: [33.6, 1.55, -15.5], look: [30.5, 2.4, -33], fov: 50, label: '道口' },
   platform: { pos: [15.5, PLATFORM.top + 1.5, -25.2], look: [-30, PLATFORM.top + 1.3, -30.5], fov: 55, label: '站台' },
   levee: { pos: [-40, TERRAIN.leveeHeight + 1.6, -70], look: [20, 3, -40], fov: 50, label: '河堤' },
   aerial: { pos: [70, 38, 70], look: [-4, 0, -18], fov: 45, label: '俯瞰' },
@@ -943,6 +1012,7 @@ function onRoad(x, z) {
   if (Math.abs(x - cr.x) <= cr.halfWidth && z >= cr.from && z <= cr.to) return true;
   if (Math.abs(z - nr.z) <= nr.halfWidth && x >= nr.from && x <= nr.to) return true;
   if (z >= MAIN_STREET.zStart && z <= MAIN_STREET.zEnd && Math.abs(x - MAIN_STREET.centerX(z)) <= MAIN_STREET.shoulder) return true;
+  for (const l of ROADS.lanes) if (Math.abs(z - l.z) <= l.halfWidth && x >= l.from && x <= l.to) return true;
   return false;
 }
 
@@ -994,6 +1064,13 @@ function stationFloorY(x, z) {
   return f;
 }
 
+/** River band the walker may not enter (between the waterlines) except on the bridge. */
+export const RIVER_BLOCK = { zSouth: -76.2, zNorth: -94.4 };
+
+export function onBridge(x, z) {
+  return Math.abs(x - BRIDGE.x) <= BRIDGE.halfWidth && z <= BRIDGE.zSouth && z >= BRIDGE.zNorth;
+}
+
 /** Where the walking camera should stand (eye height added by the controls). */
 export function walkFloorY(x, z) {
   const P = PLATFORM;
@@ -1002,7 +1079,23 @@ export function walkFloorY(x, z) {
   if ((onP1 || onP2) && x > P.xMin - 4.4 && x < P.xMax + P.rampLength) return platformY(x);
   const B = STATION.building;
   if (x > B.xMin && x < B.xMax && z > B.zMin && z < B.zMax) return stationFloorY(x, z);
-  return Math.max(surfaceY(x, z), isRiver(x, z) ? TERRAIN.waterLevel : -Infinity);
+  if (onBridge(x, z)) {
+    // ramps up from the levee tops to the deck
+    const t = Math.min(1, (BRIDGE.zSouth - z) / 3, (z - BRIDGE.zNorth) / 3);
+    return lerp(TERRAIN.leveeHeight, BRIDGE.deckY, clamp(t, 0, 1));
+  }
+  // level crossing deck and the in-station crossing sit at rail-top height
+  const C = CROSSING;
+  if (Math.abs(x - C.x) <= C.roadHalfWidth + 0.5 && z <= C.deckZ[0] + 1.5 && z >= C.deckZ[1] - 1.5) {
+    const edge = Math.min(C.deckZ[0] - z, z - C.deckZ[1]);
+    return edge >= 0 ? RAIL.railTop : lerp(RAIL.railTop, SURFACE_LIFT.road, clamp(-edge / 1.5, 0, 1));
+  }
+  if (x >= P.xMin - 4.4 && x <= P.xMin - 2.6 && z < P.P1.zBack && z > P.P2.zBack) return RAIL.railTop;
+  // ballast beds
+  if (z < RAIL.corridor.zMax && z > RAIL.corridor.zMin) {
+    for (const t of RAIL.tracks) if (Math.abs(z - t.z) < RAIL.ballastTopWidth / 2) return RAIL.ballastTop + 0.04;
+  }
+  return surfaceY(x, z);
 }
 
 /** World bounds the walking camera is clamped to. */
@@ -1010,6 +1103,6 @@ export const WALK_BOUNDS = { xMin: -140, xMax: 150, zMin: -104, zMax: 175 };
 
 export default {
   TERRAIN, RAIL, PLATFORM, STATION, MAIN_STREET, ROADS, ROAD_MARKINGS, CROSSING, TRAIN, PLAZA,
-  LOTS, TREES, POLE_LINES, SPOTS, CAMERAS, WALK_BOUNDS, SHOP_TYPES,
+  LOTS, TREES, POLE_LINES, SPOTS, CAMERAS, WALK_BOUNDS, SHOP_TYPES, BRIDGE, RIVER_BLOCK, onBridge,
   groundY, surfaceY, platformY, SURFACE_LIFT, isRiver, walkFloorY, lotById, lotsOfType, makeRng, hashString, clamp, lerp, smoothstep,
 };

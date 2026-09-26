@@ -21,6 +21,8 @@ import { FXAAPass } from 'three/addons/postprocessing/FXAAPass.js';
 import { TOON_UNIFORMS } from './toon.js';
 
 export const OUTLINE_LAYER = 1;
+/** Opaque objects that draw no outline but must still hide outlines behind them (depth-only mask). */
+export const MASK_LAYER = 2;
 
 const OutlineShader = {
   uniforms: {
@@ -72,6 +74,8 @@ const OutlineShader = {
     void main() {
       vec4 base = texture2D( tDiffuse, vUv );
       if ( enabled < 0.5 ) { gl_FragColor = base; return; }
+      // masked pixel: an opaque noOutline object is in front -> no line here
+      if ( texture2D( tNormal, vUv ).a < 0.5 && texture2D( tDepth, vUv ).x < 1.0 ) { gl_FragColor = base; return; }
       vec2 px = thickness / resolution;
       float zc = viewZ( vUv );
       float zl = viewZ( vUv - vec2( px.x, 0.0 ) );
@@ -183,7 +187,7 @@ export function createPostFX(renderer, scene, camera, { quality = 'high', sunDir
 
   let bloom = null;
   if (quality !== 'low') {
-    bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.18, 0.55, 0.92);
+    bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.16, 0.5, 1.3); // only emissive/very bright bits glow; sunlit pastel whites stay crisp
     composer.addPass(bloom);
   }
 
@@ -237,6 +241,21 @@ export function createPostFX(renderer, scene, camera, { quality = 'high', sunDir
     return v;
   }
 
+  const maskMats = {};
+  function maskFor(src) {
+    const side = src.side ?? THREE.FrontSide;
+    if (!maskMats[side]) {
+      maskMats[side] = new THREE.ShaderMaterial({
+        vertexShader: '#include <common>\nvoid main() {\n#include <begin_vertex>\n#include <project_vertex>\n}',
+        fragmentShader: 'void main() { gl_FragColor = vec4( 0.0 ); }',
+        side,
+      });
+    }
+    return maskMats[side];
+  }
+  let maskMeshes = [];
+  function setMaskMeshes(list) { maskMeshes = list; }
+
   const swapped = [];
   const layerCam = new THREE.PerspectiveCamera();
   const clearColor = new THREE.Color();
@@ -256,8 +275,14 @@ export function createPostFX(renderer, scene, camera, { quality = 'high', sunDir
     };
     if (outlineMeshes) for (let i = 0; i < outlineMeshes.length; i++) swap(outlineMeshes[i]);
     else scene.traverseVisible(swap);
+    for (let i = 0; i < maskMeshes.length; i++) {
+      const o = maskMeshes[i];
+      swapped.push(o, o.material);
+      o.material = maskFor(o.material);
+    }
     layerCam.copy(camera);
     layerCam.layers.set(OUTLINE_LAYER);
+    layerCam.layers.enable(MASK_LAYER);
     // lines are fully faded beyond fadeFar, so the pre-pass can skip everything further away
     layerCam.far = Math.min(camera.far, outline.uniforms.fadeFar.value + 30);
     layerCam.updateProjectionMatrix();
@@ -312,5 +337,5 @@ export function createPostFX(renderer, scene, camera, { quality = 'high', sunDir
   }
   setSize(size.x, size.y);
 
-  return { composer, render, setSize, setOutlineMeshes, outline, grade, bloom, normalRT, OUTLINE_LAYER };
+  return { composer, render, setSize, setOutlineMeshes, setMaskMeshes, outline, grade, bloom, normalRT, OUTLINE_LAYER, MASK_LAYER };
 }

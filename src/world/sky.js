@@ -8,7 +8,7 @@
  * - instanced far houses on the northern hillside and around the horizon
  */
 import * as THREE from 'three';
-import { groundY, TERRAIN, makeRng, WALK_BOUNDS } from '../core/layout.js';
+import { groundY, TERRAIN, makeRng, WALK_BOUNDS, RAIL, ROADS, TREES, BRIDGE } from '../core/layout.js';
 import { drawTexture, seeded } from '../core/canvasTex.js';
 
 const SKY_R = 2200;
@@ -270,9 +270,21 @@ function farTown(ctx) {
   const houses = [];
   const roofs = [];
   const blocks = [];
-  const wallCols = ['#f4efe6', '#ece3d3', '#e9edf1', '#f1e7dc', '#e2e9ee', '#f6f2ea', '#efe1d6', '#e6ecdf'];
+  // slightly darker than the near town so sunlit walls never bloom at distance
+  const wallCols = ['#ddd6c9', '#d6cbb8', '#d2d7dc', '#dacfc2', '#cbd3d9', '#dfd8cc', '#d8c9bc', '#d0d7c8'];
+  const farTrees = TREES.filter((t) => t.far || t.z < TERRAIN.farLeveeTopNorth);
+  const M = 50; // keep generic far houses well outside the walkable area
+  const blocked = (x, z, r) => {
+    if (z > RAIL.corridor.zMin - 6 && z < RAIL.corridor.zMax + 6) return true; // tracks run to x = ±440
+    if (Math.abs(z - ROADS.stationFront.z) < 8 || Math.abs(z - ROADS.northRoad.z) < 7) return true; // road lines
+    if (Math.abs(x - BRIDGE.x) < 9 && z > TERRAIN.farLeveeTopNorth - 30) return true; // lane up from the bridge
+    if (x > WALK_BOUNDS.xMin - M && x < WALK_BOUNDS.xMax + M && z > WALK_BOUNDS.zMin - M && z < WALK_BOUNDS.zMax + M && z > TERRAIN.farLeveeTopNorth) return true;
+    for (const t of farTrees) if (Math.abs(t.x - x) < r + 4 && Math.abs(t.z - z) < r + 4) return true;
+    return false;
+  };
   const roofCols = ['#5d6672', '#56677a', '#6a5a50', '#4f6b5e', '#7b6f6a', '#687a8e', '#8a5a4c', '#4d5a6b'];
   const addHouse = (x, z, s = 1, ry = 0) => {
+    if (blocked(x, z, 5 * s)) return;
     const y = groundY(x, z);
     const w = (7 + rng() * 3) * s, d = (6 + rng() * 2.5) * s, h = (rng() < 0.18 ? 3.1 : 5.7) * s;
     ry += (rng() - 0.5) * 0.25 + (rng() < 0.35 ? Math.PI / 2 : 0);
@@ -280,22 +292,23 @@ function farTown(ctx) {
     roofs.push({ x, y: y + h - 0.05, z, ry, sx: w * 1.12, sy: d * 0.36, sz: d * 1.18, color: rng.pick(roofCols) });
   };
   const addBlock = (x, z) => {
+    if (blocked(x, z, 16)) return;
     const y = groundY(x, z);
     const floors = 3 + Math.floor(rng() * 3);
     blocks.push({ x, y: y - 0.3, z, ry: (rng() - 0.5) * 0.2, sx: 22 + rng() * 14, sy: floors * 2.9 + 0.3, sz: 9 + rng() * 3, color: rng.pick(['#f3f1ec', '#ece8e0', '#e8ecef']) });
   };
   // hillside north of the river: lanes that follow the contour (houses on both sides)
   for (let lane = 0; lane < 14; lane++) {
-    const z0 = TERRAIN.farLeveeTopNorth - 14 - lane * 22 - rng() * 6;
+    const z0 = TERRAIN.farLeveeTopNorth - 40 - lane * 22; // first lane 40 m back so the hill rises behind the levee
     for (let x = -430; x < 430; x += 11 + rng() * 7) {
       if (rng() < 0.12 + Math.abs(x) / 1400) continue;
-      const wob = Math.sin(x * 0.012 + lane) * 6;
+      const wob = Math.sin(x * 0.012 + lane) * 2.5;
       addHouse(x, z0 + wob + (rng() < 0.5 ? -6 : 6), 0.95 + rng() * 0.2);
     }
     if (lane % 3 === 1) for (let k = 0; k < 3; k++) addBlock(-300 + rng() * 600, z0 - 3);
   }
   // east / west / south outskirts beyond the walkable area
-  for (let i = 0; i < 620; i++) {
+  for (let i = 0; i < 1100; i++) {
     const a = rng() * Math.PI * 2;
     const r = 175 + rng() * 260;
     const x = Math.cos(a) * r, z = 40 + Math.sin(a) * r * 0.9;

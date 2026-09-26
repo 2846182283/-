@@ -14,6 +14,7 @@
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -35,8 +36,10 @@ const H = Number(opt('h', 720));
 const extraWait = Number(opt('wait', 600));
 const timeout = Number(opt('timeout', 240000));
 
+const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vite-shot-'));
 const server = await createServer({
   root,
+  cacheDir, // private dep cache: several shot runs can execute concurrently
   logLevel: 'error',
   server: { port: 0, host: '127.0.0.1', strictPort: false, hmr: false },
   clearScreen: false,
@@ -92,5 +95,6 @@ try {
 } finally {
   await browser.close();
   await server.close();
+  fs.rmSync(cacheDir, { recursive: true, force: true });
 }
 process.exit(failed ? 1 : 0);

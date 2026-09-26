@@ -7,7 +7,7 @@
  * with felt and a red parasol, wooden display rack, たい焼き flag.
  */
 import { shopHouse, room, hisashi } from './shell.js';
-import { slidingDoors, noren, lantern, engawaBench, parasol, nobori, pendant, poster, manekiNeko } from './parts.js';
+import { slidingDoors, noren, lantern, engawaBench, parasol, nobori, pendant, poster, manekiNeko, hangingPlate } from './parts.js';
 
 const DARK = '#3a2a20';
 const TIMBER = '#6e5038';
@@ -48,7 +48,7 @@ export function buildWagashi(S) {
   B.sway = 0;
   B.box('solid', lx0 - 0.02, F + 2.1, Z + 0.28, lx1 + 0.02, F + 2.13, Z + 0.31, '#8a6446');
   // menu plaques on the lattice
-  B.box('solid', -2.95, F + 0.18, Z + 0.02, -2.1, F + 0.6, Z + 0.05, '#8a6446', { rect: A.get('wTags'), face: 'Z' });
+  B.box('solid', -2.95, F + 0.18, Z + 0.02, -2.1, F + 0.6, Z + 0.05, '#6a4e3a', { rect: A.get('wTags'), face: 'Z', colors: { Z: '#ffffff' } });
   // --- right: display window with sweets and a maneki-neko
   const rx0 = 1.76, rx1 = 3.28;
   B.box('wood', rx0, F, zf - 0.02, rx1, F + 0.72, zf + 0.02, '#5a4030');
@@ -69,6 +69,8 @@ export function buildWagashi(S) {
   B.quad('solid', 0, sy, Z + 0.165, 3.5, 0.62, '#ffffff', A.get('wSign'));
   B.box('solid', -1.95, sy + 0.36, Z + 0.02, 1.95, sy + 0.44, Z + 0.24, '#4f5864'); // tiny roof over the board
   noren(S, 0, F + 2.3, Z + 0.14, 2.0, 0.95, A.get('wNoren'), 3, { rodCol: '#5a4030' });
+  hangingPlate(S, 1.2, F + 1.2, zf + 0.03, 0.34, 0.25, A.get('shopcard'));
+  andon(S, 1.42, Z + 0.32);
   for (const x of [-1.98, 1.98]) {
     B.box('solid', x - 0.02, F + 2.22, Z + 0.3, x + 0.02, F + 2.26, Z + 0.78, DARK);
     lantern(S, x, F + 2.2, Z + 0.72, 0.19, 0.46, A.get('wLantern'), { lit: true, color: '#fff2da' });
@@ -96,6 +98,21 @@ export function buildWagashi(S) {
 
   interior(S, F, Z);
   return hs;
+}
+
+/** Standing paper lightbox (行灯看板): timber frame, glowing washi faces, small roof. */
+function andon(S, x, z) {
+  const { B, A } = S;
+  const gy = S.gy(x, z);
+  const w = 0.3, h = 0.95, y0 = 0.12;
+  B.pushT(x, gy, z, -0.2);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) B.box('solid', sx * w / 2 - 0.025, 0, sz * w / 2 - 0.025, sx * w / 2 + 0.025, y0 + h + 0.04, sz * w / 2 + 0.025, DARK);
+  const r = A.get('wAndon');
+  // glowing faces (front/back carry the picture, sides plain washi)
+  B.box('lit', -w / 2 + 0.02, y0, -w / 2 + 0.02, w / 2 - 0.02, y0 + h, w / 2 - 0.02, '#fff4dc', { rects: { Z: r, z: r }, skip: 'yY' });
+  B.box('solid', -w / 2 - 0.05, y0 + h + 0.04, -w / 2 - 0.05, w / 2 + 0.05, y0 + h + 0.09, w / 2 + 0.05, DARK);
+  B.box('solid', -w / 2 - 0.02, y0 - 0.04, -w / 2 - 0.02, w / 2 + 0.02, y0, w / 2 + 0.02, DARK);
+  B.pop();
 }
 
 /** Two-tier wooden stand with wrapped gift boxes. */

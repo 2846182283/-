@@ -63,7 +63,59 @@ export function buildZakka(S) {
   cardboard(S, 0.3, F, Z - 0.9, 0.44, 0.32, 0.36, 0.3);
   apron(S, F, Z);
   interior(S, F, Z);
+  retroShelf(S, -2.2, F, Z - 0.62);
   return hs;
+}
+
+/**
+ * Stepped display shelf just inside the door: Showa toys (daruma, kokeshi,
+ * tin robot, spinning tops, a toy car) and ceramics (rice bowls, teapot,
+ * sake cups) -- the 懐かし corner that reads through the open front.
+ */
+function retroShelf(S, x, F, z) {
+  const { B } = S;
+  const W = 1.3, wood = '#8a6446';
+  B.pushT(x, F, z, 0);
+  for (const sx of [-1, 1]) B.box('inner', sx * W / 2 - 0.03, 0, -0.35, sx * W / 2 + 0.03, 1.72, 0.05, wood);
+  const tiers = [[0.95, 0.0], [1.3, -0.14], [1.65, -0.28]];
+  for (const [ty, tz] of tiers) B.box('inner', -W / 2, ty - 0.03, tz - 0.08, W / 2, ty, tz + 0.1, '#b58c63');
+  B.box('inner', -W / 2, 0, -0.36, W / 2, 1.72, -0.33, '#6a4e3a'); // back board
+  // tier 1: ceramics
+  let y = tiers[0][0], zz = tiers[0][1];
+  for (let i = 0; i < 3; i++) {
+    const bx = -0.5 + i * 0.2;
+    B.sphere('inner', bx, y + 0.07, zz, 0.075, ['#f4efe2', '#6a8aa8', '#c8b090'][i], { half: true, w: 10, h: 3, rx: Math.PI, sy: 0.9 });
+    B.cyl('inner', bx, y, zz, 0.035, 0.012, '#d8d0c0', { seg: 8 });
+  }
+  B.sphere('inner', 0.18, y + 0.09, zz, 0.09, '#4a6a5a', { w: 10, h: 7, sy: 0.85 }); // teapot
+  B.beam('inner', [0.26, y + 0.08, zz + 0.02], [0.34, y + 0.14, zz + 0.04], 0.025, 0.025, '#4a6a5a');
+  B.sphere('inner', 0.18, y + 0.17, zz, 0.025, '#3a5a4a', { ico: 0 });
+  for (let i = 0; i < 3; i++) B.cyl('inner', 0.42 + i * 0.07, y, zz + 0.03, 0.025, 0.04, '#f4efe2', { rb: 0.018, seg: 8 });
+  // tier 2: daruma family + kokeshi
+  y = tiers[1][0]; zz = tiers[1][1];
+  for (const [dx, r] of [[-0.48, 0.09], [-0.3, 0.07], [-0.16, 0.055]]) {
+    B.sphere('inner', dx, y + r * 1.05, zz, r, '#d8433d', { w: 10, h: 7, sy: 1.12 });
+    B.sphere('inner', dx, y + r * 1.25, zz + r * 0.62, r * 0.48, '#fbf2e6', { w: 8, h: 5, sz: 0.5 });
+  }
+  for (const [kx, h, col] of [[0.1, 0.24, '#e86a5a'], [0.24, 0.2, '#3f7fc8'], [0.36, 0.16, '#f2c230']]) {
+    B.cyl('inner', kx, y, zz, 0.035, h, col, { rb: 0.04, seg: 8 });
+    B.sphere('inner', kx, y + h + 0.045, zz, 0.05, '#fbe3d3', { w: 8, h: 6 });
+    B.sphere('inner', kx, y + h + 0.06, zz - 0.005, 0.051, '#2c2a33', { w: 8, h: 4, half: true });
+  }
+  // tier 3: tin robot, spinning tops, toy car
+  y = tiers[2][0]; zz = tiers[2][1];
+  B.box('inner', -0.52, y, zz - 0.05, -0.36, y + 0.16, zz + 0.05, '#9aa1a8');
+  B.box('inner', -0.5, y + 0.16, zz - 0.04, -0.38, y + 0.26, zz + 0.05, '#c9ccd0');
+  B.box('lit', -0.48, y + 0.2, zz + 0.05, -0.4, y + 0.22, zz + 0.052, '#ff9a6a');
+  B.box('inner', -0.45, y + 0.26, zz - 0.005, -0.43, y + 0.31, zz + 0.005, '#d8433d');
+  for (const [tx, col] of [[-0.18, '#e8483f'], [-0.06, '#3aa37a'], [0.05, '#f2c230']]) {
+    B.cyl('inner', tx, y + 0.015, zz, 0.05, 0.06, col, { rb: 0.005, seg: 10 });
+    B.cyl('inner', tx, y + 0.075, zz, 0.008, 0.04, '#6a4e3a', { seg: 5 });
+  }
+  B.box('inner', 0.2, y + 0.03, zz - 0.06, 0.5, y + 0.1, zz + 0.06, '#3b7fd1');
+  B.box('inner', 0.27, y + 0.1, zz - 0.05, 0.43, y + 0.16, zz + 0.05, '#bfe3f0');
+  for (const wx of [0.25, 0.45]) B.cyl('inner', wx, y + 0.03, zz - 0.065, 0.03, 0.13, '#2e2e32', { rx: Math.PI / 2, seg: 8 });
+  B.pop();
 }
 
 function apron(S, F, Z) {
@@ -113,8 +165,8 @@ function interior(S, F, Z) {
     B.pop();
   }
   shelf(S, -1.2, F, zb, 3.4, 2.1, 0.4, A.get('zGoods'), { color: '#b58c63' });
-  B.box('inner', -1.0, F, Z - 2.9, 1.0, F + 0.9, Z - 2.1, '#8a6446', { rect: A.sub('zGoods', 0, 0.5, 0.4, 0.5), face: 'Z' });
-  B.box('inner', -0.95, F + 0.9, Z - 2.85, 0.95, F + 1.05, Z - 2.15, '#e8483f', { rect: A.sub('zGoods', 0.4, 0, 0.5, 0.45), face: 'Y' });
+  B.box('inner', -1.0, F, Z - 2.9, 1.0, F + 0.9, Z - 2.1, '#8a6446', { rect: A.sub('zGoods', 0, 0.5, 0.4, 0.5), face: 'Z', colors: { Z: '#ffffff' } });
+  B.box('inner', -0.95, F + 0.9, Z - 2.85, 0.95, F + 1.05, Z - 2.15, '#e8483f', { rect: A.sub('zGoods', 0.4, 0, 0.5, 0.45), face: 'Y', colors: { Y: '#ffffff' } });
   B.box('inner', 1.2, F, zb + 0.6, 3.2, F + 0.9, zb + 1.2, '#6a4e3a');
   B.box('inner', 2.0, F + 0.9, zb + 0.7, 2.5, F + 1.15, zb + 1.1, '#c9a24a');
   B.box('inner', 2.6, F + 0.9, zb + 0.75, 2.9, F + 1.3, zb + 1.05, '#8a6446');

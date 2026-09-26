@@ -476,7 +476,7 @@ export function aFrame(S, x, y, z, ry, rectFront, rectBack, o = {}) {
   B.pushT(x, y, z, ry);
   for (const side of [1, -1]) {
     B.pushT(0, 0, side * spread, side > 0 ? 0 : Math.PI, -tilt, 0);
-    B.box('solid', -w / 2, 0, -0.012, w / 2, h, 0.012, '#8a6446', { rect: side > 0 ? rectFront : rectBack, face: 'Z' });
+    B.box('solid', -w / 2, 0, -0.012, w / 2, h, 0.012, '#8a6446', { rect: side > 0 ? rectFront : rectBack, face: 'Z', colors: { Z: '#ffffff' } });
     B.pop();
   }
   B.beam('deco', [0, h * 0.35, spread * 0.62], [0, h * 0.35, -spread * 0.62], 0.01, 0.01, '#444');
@@ -620,7 +620,7 @@ export function broom(S, x, y, z, lean = 0.18, o = {}) {
 export function cardboard(S, x, y, z, w, h, d, ry = 0) {
   const B = S.B, r = S.A.get('box');
   B.pushT(x, y, z, ry);
-  B.box('solid', -w / 2, 0, -d / 2, w / 2, h, d / 2, '#e0bc88', { rects: { Z: r, X: r, z: r, x: r } });
+  B.box('solid', -w / 2, 0, -d / 2, w / 2, h, d / 2, '#ffffff', { rects: { Z: r, X: r, z: r, x: r }, colors: { Y: '#e0bc88', y: '#c8a070' } });
   B.box('deco', -0.04, h, -d / 2 - 0.002, 0.04, h + 0.004, d / 2 + 0.002, '#ecd6aa');
   B.pop();
 }
@@ -666,7 +666,7 @@ export function hangingPlate(S, x, y, z, w, h, rect) {
   const B = S.B;
   B.beam('deco', [x - w * 0.3, y + h / 2, z + 0.01], [x, y + h / 2 + 0.1, z + 0.01], 0.004, 0.004, '#555');
   B.beam('deco', [x + w * 0.3, y + h / 2, z + 0.01], [x, y + h / 2 + 0.1, z + 0.01], 0.004, 0.004, '#555');
-  B.box('solid', x - w / 2, y - h / 2, z, x + w / 2, y + h / 2, z + 0.015, '#7a5a3e', { rect, face: 'Z' });
+  B.box('solid', x - w / 2, y - h / 2, z, x + w / 2, y + h / 2, z + 0.015, '#5a4030', { rect, face: 'Z', colors: { Z: '#ffffff' } });
 }
 
 /** Projecting sign (袖看板): a box sign perpendicular to the facade at x on wall plane z. */

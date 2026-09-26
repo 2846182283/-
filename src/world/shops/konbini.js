@@ -187,7 +187,7 @@ function interior(S, F, Z) {
   B.box('inner', 2.35, F, Z - 1.0, 3.05, F + 1.55, Z - 0.35, '#e8ecf0', { colors: { x: '#dfe4ea' } });
   B.box('lit', 2.3, F + 1.55, Z - 0.95, 3.1, F + 1.85, Z - 0.4, '#ffffff', { rects: { Z: A.get('kAtm'), x: A.get('kAtm') } });
   // ceiling light rows
-  for (const lx of [-5.8, -3.6, -1.4, 0.8, 3.0, 5.6]) ceilingLight(S, lx, ceil, -0.4, 0.3, 9.4, '#fbfbf6');
+  for (const lx of [-5.8, -3.6, -1.4, 0.8, 3.0, 5.6]) ceilingLight(S, lx, ceil, -0.4, 0.3, 9.4, '#fff6e2');
 }
 
 function exterior(S, F, Z, band0) {

@@ -133,6 +133,14 @@ export function paintStreet(add, names) {
     V(c, wB, w * 0.75, 10, h - 10, { font: M, color: '#2a1e18', maxSize: 30 });
     c.fillStyle = '#2a1e18'; c.fillRect(0, 0, w, 6); c.fillRect(0, h - 6, w, 6);
   });
+  // standing paper lightbox (行灯看板) by the door: one face per side
+  add('wAndon', 96, 256, (c, w, h, rnd) => {
+    grad(c, 0, 0, w, h, '#fffaf0', '#f6ead2');
+    for (let i = 0; i < 5; i++) petal(c, rnd() * w, h * 0.75 + rnd() * h * 0.22, 3 + rnd() * 3, rnd() * 6, '#f9c3d2');
+    V(c, wB, w / 2, 14, h * 0.7, { font: M, color: '#2a1e18', maxSize: 50 });
+    c.fillStyle = '#c23a3a'; roundRect(c, w / 2 - 20, h * 0.74, 40, 40, 5); c.fill();
+    T(c, '菓', w / 2 - 17, h * 0.74 + 3, 34, 34, { font: M, color: '#fff' });
+  });
   add('wPoster', 192, 256, (c, w, h, rnd) => {
     paper(c, w, h, '#fde8ee', rnd);
     for (let i = 0; i < 16; i++) petal(c, rnd() * w, rnd() * h, 4 + rnd() * 4, rnd() * 6, '#f9c3d2');

@@ -44,7 +44,7 @@ export function buildTabako(S) {
   manekiNeko(S, k0 + 0.35, F + 0.84, zf - 0.22, 0, 0.7);
   pendant(S, (k0 + k1) / 2, F + 2.4, Z - 0.8, 0.35, { style: 'bulb' });
   // red たばこ sign above the window, small plates beside it
-  B.box('solid', k0 + 0.1, F + 2.1, Z, k1 - 0.1, F + 2.58, Z + 0.07, '#d8403a', { rect: A.get('tTabako'), face: 'Z' });
+  B.box('solid', k0 + 0.1, F + 2.1, Z, k1 - 0.1, F + 2.58, Z + 0.07, '#b8342e', { rect: A.get('tTabako'), face: 'Z', colors: { Z: '#ffffff' } });
   B.box('solid', -0.5, F + 1.25, Z, 0.05, F + 1.6, Z + 0.02, '#ffffff', { rect: A.sub('tSmall', 0, 0, 0.63, 1), face: 'Z' });
   B.box('solid', -0.42, F + 0.8, Z, -0.03, F + 1.18, Z + 0.02, '#ffffff', { rect: A.sub('tSmall', 0.64, 0, 0.36, 1), face: 'Z' });
   poster(S, -1.1, F + 0.4, Z, 0.36, 0.52, A.get('matsuri'), { off: 0.005 });

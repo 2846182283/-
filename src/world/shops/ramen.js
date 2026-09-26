@@ -31,7 +31,7 @@ export function buildRamen(S) {
   B.box('solid', -3.15, F + 2.22, zf - 0.08, 3.15, F + 2.34, zf + 0.12, WOODR);
   // menu bay: wooden plaques board + a poster
   B.box('wood', -3.04, F, zf - 0.02, -2.01, F + 2.22, zf + 0.02, '#6a4234');
-  B.box('solid', -2.95, F + 1.0, zf + 0.02, -2.1, F + 1.85, zf + 0.06, '#6a4e3a', { rect: A.get('rMenu'), face: 'Z' });
+  B.box('solid', -2.95, F + 1.0, zf + 0.02, -2.1, F + 1.85, zf + 0.06, '#4a3426', { rect: A.get('rMenu'), face: 'Z', colors: { Z: '#ffffff' } });
   poster(S, -2.52, F + 0.62, zf + 0.02, 0.4, 0.56, A.get('rPoster'));
   // sliding door (2 panels, lower wood, one open a crack)
   slidingDoors(S, -1.89, 0.29, F, F + 2.22, zf, { panels: 2, frame: WOODR, kick: 0.5, kickKind: 'wood', kickColor: '#6a4234', bars: 2, open: 0.25 });

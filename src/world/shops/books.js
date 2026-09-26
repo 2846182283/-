@@ -100,7 +100,7 @@ function bargainCart(S, x, z) {
   }
   // 100-yen sign on a stick
   B.box('solid', 0.46, 0.8, 0.18, 0.48, 1.12, 0.2, '#8a6446');
-  B.box('solid', 0.3, 1.02, 0.2, 0.64, 1.2, 0.215, '#f4d27a', { rect: A.get('b100'), face: 'Z' });
+  B.box('solid', 0.3, 1.02, 0.2, 0.64, 1.2, 0.215, '#e0b860', { rect: A.get('b100'), face: 'Z', colors: { Z: '#ffffff' } });
   B.pop();
 }
 

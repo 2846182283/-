@@ -105,8 +105,9 @@ export function createEngine(canvas, params) {
       o.layers.disable(MASK_LAYER);
       if (o.userData.noOutline || transparent) {
         o.layers.disable(OUTLINE_LAYER);
-        // opaque, non-cutout, non-custom-shader objects still hide the outlines of things behind them
-        const maskable = !Array.isArray(m) && !transparent && !m.isShaderMaterial && !(m.alphaTest > 0) && m.depthWrite !== false && !o.userData.noMask;
+        // opt-in: large opaque noOutline surfaces (userData.outlineMask) still hide the outlines of
+        // things behind them; small details are not worth the extra pre-pass triangles
+        const maskable = o.userData.outlineMask === true && !Array.isArray(m) && !transparent && !m.isShaderMaterial;
         if (maskable) {
           o.layers.enable(MASK_LAYER);
           masks.push(o);

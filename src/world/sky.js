@@ -320,6 +320,7 @@ function farTown(ctx) {
   const toon = ctx.toon;
   const mk = (geo, mat, list) => {
     const im = ctx.geom.instanced(geo, mat, list.map((t) => ({ x: t.x, y: t.y, z: t.z, ry: t.ry, sx: t.sx, sy: t.sy, sz: t.sz })), { castShadow: false, noOutline: true });
+    im.userData.outlineMask = true; // hide outlines of trees behind these walls
     list.forEach((t, i) => im.setColorAt(i, new THREE.Color(t.color)));
     im.instanceColor.needsUpdate = true;
     return im;

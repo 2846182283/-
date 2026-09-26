@@ -91,7 +91,9 @@ Rules:
    many repeats (sleepers, ballast, petals, bushes, windows). Keep animated
    parts separate and mark them `userData.dynamic = true` before baking.
 4. **Outlines** come from a post-process on everything except objects with
-   `userData.noOutline = true`. Set it on: decals / text planes, glass,
+   `userData.noOutline = true`. A noOutline object does not hide the outlines
+   of things behind it unless it also sets `userData.outlineMask = true` (use
+   this only for large opaque surfaces: it costs pre-pass triangles). Set it on: decals / text planes, glass,
    wires & cables, particles, foliage cards with alpha, tiny details that
    would turn into black blobs at distance, emissive lamp faces.
 5. **Shadows**: `castShadow` on solid things taller than ~0.3 m;

@@ -18,6 +18,7 @@
 import * as THREE from 'three';
 import { createEngine } from './core/engine.js';
 import { ensureFonts } from './core/canvasTex.js';
+import { startAmbience } from './core/ambience.js';
 import { CAMERAS } from './core/layout.js';
 
 export const MODULES = [
@@ -105,6 +106,7 @@ async function main() {
   }
 
   engine.assignLayers();
+  startAmbience(ctx);
   setLoad(0.93, '编译着色器…');
   // camera setup before first frame
   if (params.has('cam')) {
@@ -178,7 +180,7 @@ function buildUI(engine) {
     btns.walk.classList.toggle('on', m === 'walk');
     btns.orbit.classList.toggle('on', m === 'orbit');
     const walking = m === 'walk';
-    const locked = controls.plc.isLocked;
+    const locked = controls.plc.isLocked || controls.isTouch;
     hint.style.display = walking && !locked ? 'block' : 'none';
     cross.style.display = walking && locked ? 'block' : 'none';
   }

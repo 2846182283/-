@@ -107,9 +107,32 @@ export function createEngine(canvas, params) {
   const frameWaiters = [];
   let running = false;
 
+  // adaptive resolution: trade pixel ratio for frame rate on slower GPUs (never in screenshot mode)
+  const dprMax = renderer.getPixelRatio();
+  const dprMin = Math.min(dprMax, quality === 'low' ? 0.7 : 0.85);
+  let dpr = dprMax;
+  let frameAcc = 0, frameN = 0, lastAdjust = 0;
+  function adaptResolution(rdt) {
+    if (params.has('shot') || params.has('fixeddpr')) return;
+    frameAcc += rdt; frameN++;
+    const now = performance.now();
+    if (now - lastAdjust < 2500 || frameN < 30) return;
+    const avg = frameAcc / frameN;
+    frameAcc = 0; frameN = 0; lastAdjust = now;
+    let next = dpr;
+    if (avg > 1 / 45) next = Math.max(dprMin, dpr * 0.85);
+    else if (avg < 1 / 58 && dpr < dprMax) next = Math.min(dprMax, dpr * 1.1);
+    if (Math.abs(next - dpr) > 0.02) {
+      dpr = next;
+      renderer.setPixelRatio(dpr);
+      resize();
+    }
+  }
+
   function frame() {
     timer.update();
     const rdt = Math.min(timer.getDelta(), 0.1);
+    adaptResolution(rdt);
     renderer.info.reset();
     const dt = rdt * sim.timeScale;
     sim.step(rdt);

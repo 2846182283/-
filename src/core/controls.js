@@ -38,6 +38,62 @@ export function createControls(camera, dom, { onModeChange } = {}) {
   const vel = new THREE.Vector3();
   let walkY = null;
 
+  // ---- touch walk: virtual joystick (left) + drag to look (anywhere else) ----
+  const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+  const touch = { joyId: null, joyX: 0, joyY: 0, jx: 0, jy: 0, lookId: null, lx: 0, ly: 0 };
+  const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+  const joy = document.createElement('div');
+  joy.id = 'joystick';
+  joy.innerHTML = '<i></i>';
+  Object.assign(joy.style, {
+    position: 'fixed', left: '28px', bottom: '96px', width: '112px', height: '112px', borderRadius: '50%',
+    background: 'rgba(255,250,246,0.35)', border: '2px solid rgba(255,255,255,0.7)', display: 'none', zIndex: 11, touchAction: 'none',
+  });
+  Object.assign(joy.firstChild.style, {
+    position: 'absolute', left: '36px', top: '36px', width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(239,143,174,0.85)',
+  });
+  document.body.appendChild(joy);
+  const knob = joy.firstChild;
+  joy.addEventListener('pointerdown', (e) => {
+    touch.joyId = e.pointerId;
+    const r = joy.getBoundingClientRect();
+    touch.joyX = r.left + r.width / 2;
+    touch.joyY = r.top + r.height / 2;
+    joy.setPointerCapture(e.pointerId);
+    e.stopPropagation();
+  });
+  joy.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== touch.joyId) return;
+    let dx = e.clientX - touch.joyX, dy = e.clientY - touch.joyY;
+    const l = Math.hypot(dx, dy), max = 44;
+    if (l > max) { dx *= max / l; dy *= max / l; }
+    touch.jx = dx / max;
+    touch.jy = -dy / max;
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+  });
+  const joyEnd = (e) => {
+    if (e.pointerId !== touch.joyId) return;
+    touch.joyId = null; touch.jx = 0; touch.jy = 0;
+    knob.style.transform = '';
+  };
+  joy.addEventListener('pointerup', joyEnd);
+  joy.addEventListener('pointercancel', joyEnd);
+  dom.addEventListener('pointerdown', (e) => {
+    if (mode !== 'walk' || e.pointerType === 'mouse' || touch.lookId !== null) return;
+    touch.lookId = e.pointerId; touch.lx = e.clientX; touch.ly = e.clientY;
+  });
+  dom.addEventListener('pointermove', (e) => {
+    if (mode !== 'walk' || e.pointerId !== touch.lookId) return;
+    euler.setFromQuaternion(camera.quaternion);
+    euler.y -= (e.clientX - touch.lx) * 0.005;
+    euler.x = THREE.MathUtils.clamp(euler.x - (e.clientY - touch.ly) * 0.005, -1.35, 1.35);
+    camera.quaternion.setFromEuler(euler);
+    touch.lx = e.clientX; touch.ly = e.clientY;
+  });
+  const lookEnd = (e) => { if (e.pointerId === touch.lookId) touch.lookId = null; };
+  dom.addEventListener('pointerup', lookEnd);
+  dom.addEventListener('pointercancel', lookEnd);
+
   // colliders: lot footprints + station walls (entrance left open)
   const colliders = [];
   for (const l of LOTS) {
@@ -131,8 +187,9 @@ export function createControls(camera, dom, { onModeChange } = {}) {
         camera.position.set(s[0], s[1], s[2]);
         camera.lookAt(...CAMERAS.hero.look);
       }
-      plc.lock();
+      if (!isTouch) plc.lock();
     }
+    joy.style.display = m === 'walk' && isTouch ? 'block' : 'none';
     if (m === 'shot' || m === 'tour') goShot(shotIndex);
     onModeChange?.(m);
   }
@@ -160,8 +217,8 @@ export function createControls(camera, dom, { onModeChange } = {}) {
     } else if (mode === 'walk') {
       const run = keys.has('ShiftLeft') || keys.has('ShiftRight');
       const speed = run ? 7.5 : 3.2;
-      const f = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
-      const r = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
+      const f = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0) + touch.jy;
+      const r = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0) + touch.jx;
       vel.x += (r * speed - vel.x) * Math.min(1, dt * 10);
       vel.z += (f * speed - vel.z) * Math.min(1, dt * 10);
       plc.moveRight(vel.x * dt);
@@ -189,6 +246,6 @@ export function createControls(camera, dom, { onModeChange } = {}) {
     get mode() { return mode; },
     get shotIndex() { return shotIndex; },
     addCollider,
-    orbit, plc,
+    orbit, plc, isTouch,
   };
 }

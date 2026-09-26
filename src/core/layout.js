@@ -157,7 +157,12 @@ export const RAIL = {
     { track: 'B', x: 34 + 10, side: 1 },
   ],
   kmPosts: [-180, -80, 20, 120, 220].map((x, i) => ({ x, km: 12.4 + i * 0.1 })),
-  turnouts: [], // plain double track; no points needed at this halt
+  // A scissors-free crossover west of the station (two turnouts linking A and B), purely scenic:
+  // trains in the simulation never take the diverging route.  Point machines sit beside each switch.
+  turnouts: [
+    { id: 'T1', track: 'A', xSwitch: -118, xFrog: -101, divergesTo: 'B', hand: 'toward -z' },
+    { id: 'T2', track: 'B', xSwitch: -84, xFrog: -101, divergesTo: 'A', hand: 'toward +z' },
+  ],
 };
 
 // ---------------------------------------------------------------------------

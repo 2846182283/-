@@ -164,6 +164,8 @@ export function mat(color = '#ffffff', o = {}) {
     m.polygonOffsetUnits = -o.polygonOffset;
   }
   m.name = o.name || `toon_${colorKey(color)}`;
+  // postfx's normal pre-pass re-applies the same vertex patch so outlines follow swaying geometry
+  if (o.vertexPatch) m.userData.vertexPatch = o.vertexPatch;
   patchToon(m, o);
   cache.set(key, m);
   return m;

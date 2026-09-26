@@ -241,7 +241,11 @@ export function paint(g, color) {
 /**
  * Merge all static meshes under `root` by material.  Returns a NEW Group
  * (the input is consumed).  Options:
- *   castShadow (default true), receiveShadow (default true), name
+ *   castShadow  false forces no shadow casting.  Otherwise a merged mesh casts only if its source
+ *               meshes set castShadow = true (THREE.Mesh defaults to false).
+ *   receiveShadow (default true), name
+ *   cell        optional grid size in metres: meshes are bucketed by the cell of their world
+ *               bounding-sphere centre too, so big scenes stay frustum-cullable (e.g. 40)
  * Per-mesh flags respected: userData.noOutline, userData.dynamic (kept as-is),
  * castShadow === false on a source mesh keeps it out of shadow casting.
  */
@@ -266,7 +270,13 @@ export function bakeStatic(root, opts = {}) {
     const mat = o.material;
     const noOutline = !!o.userData.noOutline || !!mat.userData?.isGlass;
     const cast = o.castShadow !== false && opts.castShadow !== false && !mat.transparent;
-    const key = `${mat.uuid}|${noOutline}|${cast}`;
+    let cellKey = '';
+    if (opts.cell) {
+      if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+      _p.copy(o.geometry.boundingSphere.center).applyMatrix4(o.matrixWorld);
+      cellKey = `|${Math.floor(_p.x / opts.cell)},${Math.floor(_p.z / opts.cell)}`;
+    }
+    const key = `${mat.uuid}|${noOutline}|${cast}${cellKey}`;
     let b = buckets.get(key);
     if (!b) { b = { mat, noOutline, cast, geoms: [], vc: !!mat.vertexColors }; buckets.set(key, b); }
     const g = o.geometry.clone();
@@ -275,7 +285,6 @@ export function bakeStatic(root, opts = {}) {
     b.geoms.push(g);
   });
   for (const b of buckets.values()) {
-    // chunk very large buckets to keep frustum culling useful and index sizes sane
     const merged = merge(b.geoms, b.vc ? ['color'] : []);
     if (!merged) continue;
     const mesh = new THREE.Mesh(merged, b.mat);

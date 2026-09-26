@@ -67,8 +67,17 @@ export default async function build(ctx) {
 ```
 
 `ctx` provides: `THREE, scene, camera, renderer, layout, toon, geom, tex,
-palette, sim, audio, quality ('high'|'low'), params (URLSearchParams),
-sunDir, rng(seed), onUpdate(fn), addCollider(minX,maxX,minZ,maxZ)`.
+palette, sim, audio, quality ('high'|'low'), lod ({ density, detail,
+shadowDetail }), params (URLSearchParams), sunDir, rng(seed), onUpdate(fn),
+addCollider(minX,maxX,minZ,maxZ)`.
+
+Performance notes: the frame renders the scene three times (shadow map,
+outline normal pre-pass, main pass), so every triangle counts ~3×. Keep
+merged meshes spatially chunked (`bakeStatic(group, { cell: 40 })` or your own
+per-area buckets) so frustum culling works; don't let small details cast
+shadows; mark far/tiny things `userData.noOutline`; scale instance counts by
+`ctx.lod.density`. The shadow map is re-rendered only when its frustum moves,
+a train moves nearby, or every third frame (animated casters update at ~20 Hz).
 
 Rules:
 

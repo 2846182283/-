@@ -147,16 +147,21 @@ export function createControls(camera, dom, { onModeChange } = {}) {
   plc.addEventListener('unlock', () => { if (mode === 'walk') onModeChange?.('walk-paused'); });
   plc.addEventListener('lock', () => { if (mode === 'walk') onModeChange?.('walk'); });
 
+  const shotP = new THREE.Vector3();
+  const shotL = new THREE.Vector3();
+  const shotDir = new THREE.Vector3();
+  const shotOut = [shotP, shotL, 45];
   function applyShot(s, t) {
-    // slow drift: dolly forward a little and sway
-    const p = new THREE.Vector3(...s.pos);
-    const l = new THREE.Vector3(...s.look);
-    const dir = l.clone().sub(p).normalize();
+    // slow drift: dolly forward a little and sway (reuses vectors: runs every frame)
+    shotP.fromArray(s.pos);
+    shotL.fromArray(s.look);
+    shotDir.subVectors(shotL, shotP).normalize();
     const drift = mode === 'tour' ? Math.min(t, 16) * 0.22 : Math.sin(t * 0.12) * 0.35;
-    p.addScaledVector(dir, drift);
-    p.y += Math.sin(t * 0.5) * 0.015;
-    l.x += Math.sin(t * 0.21) * 0.25;
-    return [p, l, s.fov];
+    shotP.addScaledVector(shotDir, drift);
+    shotP.y += Math.sin(t * 0.5) * 0.015;
+    shotL.x += Math.sin(t * 0.21) * 0.25;
+    shotOut[2] = s.fov;
+    return shotOut;
   }
 
   function goShot(i, immediate = false) {

@@ -152,8 +152,9 @@ function clouds(ctx) {
     group.add(m);
   }
   const R = SKY_R * 0.8;
+  const dir = new THREE.Vector3();
   const place = (it) => {
-    const dir = new THREE.Vector3(Math.cos(it.el) * Math.cos(it.az), Math.sin(it.el), Math.cos(it.el) * Math.sin(it.az));
+    dir.set(Math.cos(it.el) * Math.cos(it.az), Math.sin(it.el), Math.cos(it.el) * Math.sin(it.az));
     it.m.position.copy(dir).multiplyScalar(R);
     it.m.lookAt(0, it.m.position.y * 0.2, 0);
   };

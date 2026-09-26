@@ -22,7 +22,7 @@ export function createEngine(canvas, params) {
     powerPreference: 'high-performance',
     preserveDrawingBuffer: params.has('shot'),
   });
-  const maxDpr = quality === 'low' ? 1.25 : 2;
+  const maxDpr = quality === 'low' ? 1.0 : 1.5;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxDpr));
   renderer.setSize(window.innerWidth, window.innerHeight, false);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -64,6 +64,11 @@ export function createEngine(canvas, params) {
     sim,
     audio,
     quality,
+    /**
+     * Content scaling for the quality preset. Modules multiply instance counts (petals, tufts,
+     * stones, cards…) by lod.density and may drop small details when lod.detail === 'low'.
+     */
+    lod: quality === 'low' ? { density: 0.45, detail: 'low', shadowDetail: false } : { density: 1, detail: 'high', shadowDetail: true },
     params,
     sunDir: SUN.dir,
     lighting,
@@ -138,8 +143,8 @@ export function createEngine(canvas, params) {
     sim.step(rdt);
     for (const fn of updaters) fn(dt, sim.time, rdt);
     controls.update(rdt);
-    lighting.update(camera);
-    post.render(rdt);
+    lighting.update(camera, sim);
+    post.render(rdt, lighting.state.needsShadow);
     frames++;
     for (let i = frameWaiters.length - 1; i >= 0; i--) {
       if (frames >= frameWaiters[i].at) { frameWaiters[i].resolve(); frameWaiters.splice(i, 1); }

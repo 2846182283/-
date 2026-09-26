@@ -200,7 +200,24 @@ export function createPostFX(renderer, scene, camera, { quality = 'high', sunDir
     let v = variantCache.get(src);
     if (v) return v;
     const vp = src.userData && src.userData.vertexPatch;
-    if (!vp) {
+    const cut = src.alphaTest > 0 && src.map ? src.map : null;
+    if (cut) {
+      // alpha-cut cards: discard like the real material so outlines follow the cut-out shape
+      v = new THREE.MeshNormalMaterial({ side: src.side });
+      const uniforms = { cutMap: { value: cut }, cutTest: { value: src.alphaTest }, cutXf: { value: cut.matrix } };
+      v.onBeforeCompile = (shader) => {
+        Object.assign(shader.uniforms, uniforms);
+        shader.uniforms.toonTime = TOON_UNIFORMS.toonTime;
+        shader.uniforms.toonWind = TOON_UNIFORMS.toonWind;
+        if (vp) Object.assign(shader.uniforms, vp.uniforms || {});
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>', `#include <common>\nuniform mat3 cutXf;\nvarying vec2 vCutUv;\nuniform float toonTime;\nuniform vec3 toonWind;\n${vp ? vp.pars || '' : ''}`)
+          .replace('#include <begin_vertex>', `#include <begin_vertex>\nvCutUv = ( cutXf * vec3( uv, 1.0 ) ).xy;\n${vp ? vp.main || '' : ''}`);
+        shader.fragmentShader = shader.fragmentShader
+          .replace('void main() {', 'uniform sampler2D cutMap;\nuniform float cutTest;\nvarying vec2 vCutUv;\nvoid main() {\n  if ( texture2D( cutMap, vCutUv ).a < cutTest ) discard;');
+      };
+      v.customProgramCacheKey = () => 'nrmcut|' + (vp ? vp.key || vp.main : '');
+    } else if (!vp) {
       const side = src.side ?? THREE.FrontSide;
       if (!baseNormal[side]) baseNormal[side] = new THREE.MeshNormalMaterial({ side });
       v = baseNormal[side];
@@ -234,6 +251,9 @@ export function createPostFX(renderer, scene, camera, { quality = 'high', sunDir
     });
     layerCam.copy(camera);
     layerCam.layers.set(OUTLINE_LAYER);
+    // lines are fully faded beyond fadeFar, so the pre-pass can skip everything further away
+    layerCam.far = Math.min(camera.far, outline.uniforms.fadeFar.value + 30);
+    layerCam.updateProjectionMatrix();
     const bg = scene.background;
     const fog = scene.fog;
     scene.background = null;
@@ -255,12 +275,12 @@ export function createPostFX(renderer, scene, camera, { quality = 'high', sunDir
   const sunNdc = new THREE.Vector3();
   const camDir = new THREE.Vector3();
 
-  function render(dt) {
+  function render(dt, needsShadow = true) {
     const outlinesOn = outline.uniforms.enabled.value > 0.5;
     renderer.shadowMap.needsUpdate = false;
     if (outlinesOn) renderNormalPass();
-    outline.uniforms.cameraNear.value = camera.near;
-    outline.uniforms.cameraFar.value = camera.far;
+    outline.uniforms.cameraNear.value = layerCam.near;
+    outline.uniforms.cameraFar.value = layerCam.far;
     // sun haze position
     if (sunDir) {
       sunWorld.copy(camera.position).addScaledVector(sunDir, 1000);
@@ -270,7 +290,7 @@ export function createPostFX(renderer, scene, camera, { quality = 'high', sunDir
       const w = THREE.MathUtils.smoothstep(facing, -0.1, 0.6);
       grade.uniforms.sunScreen.value.set(sunNdc.x * 0.5 + 0.5, sunNdc.y * 0.5 + 0.5, w);
     }
-    renderer.shadowMap.needsUpdate = true;
+    renderer.shadowMap.needsUpdate = needsShadow;
     composer.render(dt);
   }
 

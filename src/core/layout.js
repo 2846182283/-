@@ -918,7 +918,7 @@ const heroTree = TREES.find((t) => t.hero);
 const streetZ = heroTree.z + 9.5;
 const streetX = MAIN_STREET.centerX(streetZ) + 0.9;
 const heroZ = 24;
-const heroX = MAIN_STREET.centerX(heroZ) - 1.05;
+const heroX = MAIN_STREET.centerX(heroZ) + 0.35;
 export const CAMERAS = {
   // key frame: café awning in the foreground, 止まれ + zebra leading to the station, grand sakura left, crossing right
   hero: { pos: [heroX, groundY(heroX, heroZ) + 1.5, heroZ], look: [-2.6, 3.5, -22], fov: 44, label: '站前 · 望向车站' },

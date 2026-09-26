@@ -241,14 +241,21 @@ export function createPostFX(renderer, scene, camera, { quality = 'high', sunDir
   const layerCam = new THREE.PerspectiveCamera();
   const clearColor = new THREE.Color();
 
+  // meshes on the outline layer; set once after the world is built (engine.assignLayers), so the
+  // pre-pass needs no scene traversal.  Hidden ones are swapped too but simply not drawn.
+  let outlineMeshes = null;
+  function setOutlineMeshes(list) { outlineMeshes = list; }
+
   function renderNormalPass() {
     swapped.length = 0;
-    scene.traverseVisible((o) => {
+    const swap = (o) => {
       if ((o.isMesh || o.isInstancedMesh) && o.layers.isEnabled(OUTLINE_LAYER) && !Array.isArray(o.material)) {
         swapped.push(o, o.material);
         o.material = variantFor(o.material);
       }
-    });
+    };
+    if (outlineMeshes) for (let i = 0; i < outlineMeshes.length; i++) swap(outlineMeshes[i]);
+    else scene.traverseVisible(swap);
     layerCam.copy(camera);
     layerCam.layers.set(OUTLINE_LAYER);
     // lines are fully faded beyond fadeFar, so the pre-pass can skip everything further away
@@ -305,5 +312,5 @@ export function createPostFX(renderer, scene, camera, { quality = 'high', sunDir
   }
   setSize(size.x, size.y);
 
-  return { composer, render, setSize, outline, grade, bloom, normalRT, OUTLINE_LAYER };
+  return { composer, render, setSize, setOutlineMeshes, outline, grade, bloom, normalRT, OUTLINE_LAYER };
 }

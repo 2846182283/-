@@ -96,13 +96,18 @@ export function createEngine(canvas, params) {
 
   /** Put outline-able meshes on the outline layer; call after modules add content. */
   function assignLayers(root = scene) {
+    const list = [];
     root.traverse((o) => {
       if (!(o.isMesh || o.isInstancedMesh)) return;
       const m = o.material;
       const transparent = Array.isArray(m) ? false : (m.transparent || m.userData?.isGlass);
       if (o.userData.noOutline || transparent) o.layers.disable(OUTLINE_LAYER);
-      else o.layers.enable(OUTLINE_LAYER);
+      else {
+        o.layers.enable(OUTLINE_LAYER);
+        list.push(o);
+      }
     });
+    if (root === scene) post.setOutlineMeshes(list);
   }
 
   const timer = new THREE.Timer();

@@ -106,7 +106,11 @@ export function finishRig(RM, D, rig, P, shared, id) {
 
 /** After posing: bounding spheres from the posed skeleton (+ margin for animation). */
 export function fitBounds(ch, margin = 0.35) {
-  ch.object.updateWorldMatrix(true, true);
+  // updateMatrixWorld (not updateWorldMatrix): SkinnedMesh refreshes its bindMatrixInverse
+  // there, and the skeleton must be current, otherwise computeBoundingSphere() returns a
+  // WORLD-space sphere that the renderer then offsets again -> the character gets culled.
+  ch.object.updateMatrixWorld(true);
+  ch.skeleton.update();
   for (const m of [ch.mesh, ch.detail]) {
     if (!m) continue;
     m.computeBoundingSphere();

@@ -134,7 +134,8 @@ export function buildArms(RM, P, skin, sleeve) {
     const bulk = sleeve.bulk ?? 0.006;
     const endY = sleeve.end === 'wrist' ? P.wristY + 0.005 : sleeve.end === 'rolled' ? P.elbowY - 0.07 : sleeve.end === 'elbow' ? P.elbowY - 0.02 : P.shoulderY - 0.12;
     const prof = [
-      [P.shoulderY + 0.03, 0.022], [P.shoulderY + 0.012, 0.04], [P.shoulderY - 0.03, 0.045], [P.shoulderY - P.upperArm * 0.5, 0.039],
+      // sleeve cap tucks under the torso's shoulder line (a higher cap reads as a puffed sleeve)
+      [P.shoulderY + 0.01, 0.02], [P.shoulderY - 0.006, 0.038], [P.shoulderY - 0.04, 0.044], [P.shoulderY - P.upperArm * 0.5, 0.039],
       [P.elbowY + 0.025, 0.033], [P.elbowY, 0.031], [P.elbowY - 0.045, 0.033], [P.wristY + 0.045, 0.026], [P.wristY + 0.01, 0.022], [P.wristY - 0.015, 0.02],
     ];
     const rings = [];
@@ -166,7 +167,8 @@ export function buildArms(RM, P, skin, sleeve) {
       },
     });
     // shoulder ball keeps the joint closed when the arm lifts
-    RM.add(ellipsoid(0.047 * s + bulk, 0.045 * s + bulk, 0.044 * s + bulk, 10, 8), { m: M(sh.x - sx * 0.005, sh.y - 0.005, sh.z), bone: `upperArm_${sd}`, color: sleeve.color });
+    // (kept a little inside the shoulder line so it never reads as a puffed sleeve)
+    RM.add(ellipsoid(0.043 * s + bulk, 0.039 * s + bulk, 0.042 * s + bulk, 10, 8), { m: M(sh.x - sx * 0.01, sh.y - 0.016, sh.z), bone: `upperArm_${sd}`, color: sleeve.color });
   }
 }
 

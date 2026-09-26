@@ -891,8 +891,9 @@ export const SPOTS = {
   };
   add(48, 1, 'kei-van-white', 2.2);
   add(100, -1, 'kei-car', 2.2);
-  SPOTS.vehicles.push({ x: 20.0, z: 5.9, y: 0, rotY: -Math.PI / 2, kind: 'retro-taxi' });
-  SPOTS.vehicles.push({ x: 26.5, z: -45.0, y: 0, rotY: Math.PI / 2, kind: 'kei-car-waiting-at-crossing', note: 'north side of the crossing, waiting' });
+  // keep-left: the taxi waits at the north kerb facing east; the kei car waits southbound behind the north stop line
+  SPOTS.vehicles.push({ x: 20.0, z: 5.9, y: 0, rotY: Math.PI / 2, kind: 'retro-taxi' });
+  SPOTS.vehicles.push({ x: 33.35, z: -44.05, y: 0, rotY: 0, kind: 'kei-car-waiting-at-crossing', note: 'crossing road, southbound half, behind the north stop line' });
 }
 // bicycles leaning along the street
 {

@@ -14,7 +14,14 @@
  * vertex-coloured toon material and one 2048² canvas atlas (faces, garment
  * wraps, prints).  Hair tips / hems / scarves flutter in the vertex shader
  * from sim.wind; bones handle poses, IK reaches and idle animation.
- * See people/*.js for the pieces.
+ * Cats find their perches (garden-wall tops, the shrine's stone ledge, a
+ * stepping stone) with a one-pass triangle-grid probe over the geometry the
+ * other modules built (people/probe.js), so they sit ON things.
+ * See people/*.js for the pieces:
+ *   mesh.js (RigMesh + generators), rig.js (proportions, bones, IK), body.js,
+ *   hair.js, accessories.js, bicycle.js, atlas.js (faces / garments / prints),
+ *   character.js (assembly), recipes.js (looks), cast.js (placement + idles),
+ *   cats.js, probe.js.
  */
 import * as THREE from 'three';
 import { PeopleAtlas, paintBookCover, paintBag, paintBadge, paintPhone } from './people/atlas.js';

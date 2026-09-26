@@ -198,9 +198,15 @@ export function buildCats(ctx, shared, cast) {
     }
     if (!perch) perch = { x: sh.x + 1.3, y: groundY(sh.x + 1.3, sh.z + 0.6), z: sh.z + 0.6, rotY: sh.rotY + 0.9 };
     cats.push({ ch: buildCat('calico', 'calico', 'loaf', shared), ...perch, seed: 2 });
-    // black cat: sits on the (low, flat) gravel a short way off, watching the calico.
-    // Try a ring of spots and keep the first that is flat and free of statues / lanterns.
+    // black cat: sits on a stepping stone of the approach, just outside the little torii,
+    // facing whoever comes up the path (props/shrine.js: stones at shrine-local z 0.55..1.75).
+    // Fallback: a ring of flat, low spots around the calico, clear of statues / lanterns.
     let spot = null;
+    {
+      const w = toW(0.02, 1.35);
+      const c = probe(w.x, w.z, 3.5);
+      if (c && c.y - groundY(w.x, w.z) < 0.12) spot = { x: w.x, y: c.y, z: w.z, rotY: sh.rotY + 0.45 };
+    }
     for (let k = 0; k < 16 && !spot; k++) {
       const ang = 0.8 + k * 0.785, rad = 0.9 + (k >> 3) * 0.35;
       const bx = perch.x + Math.cos(ang) * rad, bz = perch.z + Math.sin(ang) * rad;
@@ -212,10 +218,10 @@ export function buildCats(ctx, shared, cast) {
         const q = probe(bx + ox, bz + oz, 3.5);
         if (!q || Math.abs(q.y - c.y) > 0.03) { flat = false; break; }
       }
-      if (flat) spot = { x: bx, y: c.y, z: bz };
+      if (flat) spot = { x: bx, y: c.y, z: bz, rotY: Math.atan2(perch.x - bx, perch.z - bz) + 0.3 };
     }
-    if (!spot) spot = { x: perch.x + 0.9, y: groundY(perch.x + 0.9, perch.z + 0.9) + 0.02, z: perch.z + 0.9 };
-    cats.push({ ch: buildCat('black', 'black', 'sit', shared), ...spot, rotY: Math.atan2(perch.x - spot.x, perch.z - spot.z) + 0.3, seed: 3 });
+    if (!spot) spot = { x: perch.x + 0.9, y: groundY(perch.x + 0.9, perch.z + 0.9) + 0.02, z: perch.z + 0.9, rotY: 0 };
+    cats.push({ ch: buildCat('black', 'black', 'sit', shared), ...spot, seed: 3 });
   }
 
   if (ctx.params?.get('peopleDebug')) {

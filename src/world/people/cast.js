@@ -89,7 +89,7 @@ function breathe(a, t, seed, extraX = 0, extraY = 0, extraZ = 0) {
 
 export function buildCast(ctx, shared) {
   const { layout, sim } = ctx;
-  const { SPOTS, PLATFORM, STATION, PLAZA, MAIN_STREET, LOTS, surfaceY } = layout;
+  const { SPOTS, PLATFORM, STATION, PLAZA, MAIN_STREET, ROADS, LOTS, surfaceY } = layout;
   const R = recipes();
   const group = new THREE.Group();
   group.name = 'cast';
@@ -409,12 +409,11 @@ export function buildCast(ctx, shared) {
 
   // ---- 12. walker on the main street (looping walk cycle) ------------------------------------------
   {
-    // strolls north from z ~70 to just short of the station-front junction, then loops
-    // (the respawn point is behind the hero camera, which looks north from z ~24)
-    const s0 = MAIN_STREET.atZ(70).s, s1 = MAIN_STREET.atZ(13).s;
-    const phase0 = s0 - MAIN_STREET.atZ(16.5).s; // t = 0: a few metres ahead of the hero camera
+    // Strolls north from z ~70 (behind the hero camera, which looks north from z ~24),
+    // turns left at the station-front road and walks west until the café building hides
+    // him from the hero view (x < ~-8.5), so neither end of the loop pops in view.
+    const s0 = MAIN_STREET.atZ(70).s, s1 = MAIN_STREET.atZ(12.8).s;
     const speed = 0.72;
-    const len = s0 - s1;
     const hand = V();
     let stride = 0;
     // He keeps to the pedestrian strip outside the white edge line (west side, walking
@@ -435,17 +434,31 @@ export function buildCast(ctx, shared) {
       for (const so of obstacles) w = Math.max(w, ss(Math.abs(sArc - so), 2.2, 1.0));
       return LANE + (DODGE - LANE) * w;
     };
-    // path table (x, y, z, yaw every 0.25 m), sampled once so the update never allocates
+    // raw route: main street (every 0.25 m of arc), then round the corner (clear of the
+    // junction mirror at (-4.6, 11.0) and the stop sign) along the station-front road edge
+    const raw = [];
+    for (let sa = s0; sa > s1; sa -= 0.25) raw.push(MAIN_STREET.offsetAtS(sa, lateralAt(sa)));
+    const roadZ = ROADS.stationFront.z + ROADS.stationFront.halfWidth - 0.45;
+    const last = raw[raw.length - 1];
+    for (const [x, z] of [[last.x - 0.15, 12.1], [last.x - 0.55, 11.35], [last.x - 1.3, roadZ + 0.2], [last.x - 2.4, roadZ], [-30, roadZ]]) raw.push({ x, z });
+    // resample to equal 0.25 m steps -> path table (x, y, z, yaw), so the update never allocates
     const STEP = 0.25;
-    const nPath = Math.ceil(len / STEP) + 2;
+    const cum = [0];
+    for (let i = 1; i < raw.length; i++) cum.push(cum[i - 1] + Math.hypot(raw[i].x - raw[i - 1].x, raw[i].z - raw[i - 1].z));
+    const len = cum[cum.length - 1];
+    const nPath = Math.floor(len / STEP) + 1;
     const path = new Float32Array(nPath * 4);
-    for (let i = 0; i < nPath; i++) {
-      const sArc = s0 - Math.min(len, i * STEP);
-      const p = MAIN_STREET.offsetAtS(sArc, lateralAt(sArc));
-      path[i * 4] = p.x;
-      path[i * 4 + 1] = surfaceY(p.x, p.z);
-      path[i * 4 + 2] = p.z;
+    for (let i = 0, j = 0; i < nPath; i++) {
+      const d = i * STEP;
+      while (j < raw.length - 2 && cum[j + 1] < d) j++;
+      const k = Math.min(1, (d - cum[j]) / Math.max(1e-6, cum[j + 1] - cum[j]));
+      const x = raw[j].x + (raw[j + 1].x - raw[j].x) * k, z = raw[j].z + (raw[j + 1].z - raw[j].z) * k;
+      path[i * 4] = x;
+      path[i * 4 + 1] = surfaceY(x, z);
+      path[i * 4 + 2] = z;
     }
+    const loopLen = (nPath - 1) * STEP;
+    const phase0 = cum[Math.max(0, raw.findIndex((p) => p.z < 16.5))]; // t = 0: a few metres ahead of the hero camera
     // heading from the path itself (so side-steps turn the body a little)
     for (let i = 0; i < nPath; i++) {
       const a = Math.max(0, i - 2) * 4, b = Math.min(nPath - 1, i + 2) * 4;
@@ -468,7 +481,7 @@ export function buildCast(ctx, shared) {
       }
       stride = 0.5;
     }, (a, t) => {
-      const d = (t * speed + phase0) % len;
+      const d = (t * speed + phase0) % loopLen;
       const fi = d / STEP, i = Math.min(nPath - 2, Math.floor(fi)), k = fi - i;
       const j = i * 4;
       const ph = (t * speed / stride) * Math.PI; // one step per stride length

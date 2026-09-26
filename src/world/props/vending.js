@@ -213,12 +213,8 @@ export function buildVending(kit, clusterOf) {
     if (v.id === 'V1') {
       // sorted bin station is PLAZA.trashBins (plaza.js); here: a nobori flag on the left
       nobori(kit, -0.95, s, 0.15, 0, 'noboriA', 0.015);
-    } else if (v.id === 'V4') {
-      // recycling bins to the right of the konbini pair
-      kit.push(kit.mtx(1.02, 0, 0.02));
-      recycleBins(kit, s);
-      kit.pop();
     } else if (v.id === 'V3') {
+      // (V4 needs no bins: the konbini's own sorted-bin station stands right beside the pair)
       // drink crates stacked at the left end of the konbini pair
       crate(kit, -0.85, s, -0.05, 0.1, 'crateYellow');
       crate(kit, -0.85, s + 0.31, -0.05, -0.08, 'crateYellow', false);

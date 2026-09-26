@@ -96,10 +96,12 @@ export function createKit(ctx, atlases) {
     glow: toon.unlit('#ffffff', { vertexColors: true, name: 'props_glow' }),
     glass: toon.glass({ tint: '#a9c3d6', opacity: 0.14, sheen: 0.22 }),
     glassDark: toon.glass({ tint: '#3a4c62', opacity: 0.66, sheen: 0.32 }),
+    // phone booth / shelters: faintly green-tinted panes that still read as glass at a distance
+    glassTint: toon.glass({ tint: '#b9d6cf', opacity: 0.26, sheen: 0.4, side: THREE.DoubleSide }),
   };
   // materials that never get an outline (unlit faces, glass)
-  const NO_OUTLINE = new Set(['glowV', 'glowS', 'glow', 'glass', 'glassDark']);
-  const NO_SHADOW = new Set(['glass', 'glassDark']);
+  const NO_OUTLINE = new Set(['glowV', 'glowS', 'glow', 'glass', 'glassDark', 'glassTint']);
+  const NO_SHADOW = new Set(['glass', 'glassDark', 'glassTint']);
 
   const clusters = new Map();
   let cur = null;

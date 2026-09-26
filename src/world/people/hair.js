@@ -9,9 +9,8 @@
  * ponytails ride the hair1 / hair2 bones (animated from the wind in cast.js).
  */
 import * as THREE from 'three';
-import { strand, ellipsoid, clip, torus, M, V3, mix } from './mesh.js';
+import { strand, ellipsoid, clip, torus, M, V3, mix, ss } from './mesh.js';
 
-const ss = THREE.MathUtils.smoothstep;
 
 /** Point on a sphere around the head centre: az from +Z toward +X, el up from horizontal. */
 function sph(r, az, el) {
@@ -193,7 +192,6 @@ export function buildHat(RM, P, hat, atlasRects) {
   const col = new THREE.Color(hat.color);
   const add = (g, m, color, o = {}) => RM.add(g, { m, bone: 'head', color, ...o });
   if (hat.kind === 'staffCap') {
-    const L = [];
     // crown: short cylinder flaring to a flat top, tilted slightly forward
     const crown = new THREE.LatheGeometry([
       new THREE.Vector2(R * 1.1, 0), new THREE.Vector2(R * 1.12, R * 0.3), new THREE.Vector2(R * 1.28, R * 0.62), new THREE.Vector2(R * 1.3, R * 0.68), new THREE.Vector2(R * 1.2, R * 0.74), new THREE.Vector2(0, R * 0.76),

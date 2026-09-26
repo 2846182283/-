@@ -18,7 +18,7 @@
  * Returns world-space attachment points for wires.
  */
 import * as THREE from 'three';
-import { mtx, regionUV } from './kit.js';
+import { mtx, regionUV, tubeBetween } from './kit.js';
 
 export const POLE_H = 12;
 const R_BOT = 0.165;
@@ -411,8 +411,26 @@ export function buildPole(K, P) {
     d.normalize();
     return c.addScaledVector(d, rAt(y) + 0.1);
   };
+  /**
+   * Telecom-only span leaving toward a world target (e.g. across a junction):
+   * adds a band + short arm + black grip 0.3 m under clamp i and returns the
+   * cable end point, so the cable leaves on the side it heads to.
+   */
+  const telToward = (target, i) => {
+    const y = (i === 0 ? Y.tel0 : Y.tel1) - 0.3;
+    const c = f.p(0, y, 0);
+    const d = new THREE.Vector3(target.x - c.x, 0, target.z - c.z);
+    if (d.lengthSq() < 1e-6) d.set(1, 0, 0);
+    d.normalize();
+    const r = rAt(y);
+    const end = c.clone().addScaledVector(d, r + 0.14);
+    band(y, 0.04);
+    K.add('metalS', tubeBetween(c.clone().addScaledVector(d, r - 0.01), end, 0.014, 5), C.steelDark);
+    K.add('vcS', new THREE.BoxGeometry(0.06, 0.07, 0.06), C.black, mtx(end.x, end.y - 0.02, end.z));
+    return end.setY(end.y - 0.045);
+  };
   const localPt = (lx, ly, lz) => f.p(lx, ly, lz);
-  return { id: P.id, hv, lv, tel, crossHV, lamp, dropFrom, localPt, extraWires, F };
+  return { id: P.id, hv, lv, tel, crossHV, lamp, dropFrom, telToward, localPt, extraWires, F };
 }
 
 /** Sagging polyline between two points. */

@@ -615,6 +615,50 @@ function sakuraCup(g, w, h) {
   blossom(g, w * 0.5, h * 0.35, h * 0.18, '#f29bb4', '#ffffff', 0.2);
 }
 
+/**
+ * Children's mural for the back wall of the public toilet (hand-painted look).
+ * Packed into the vending atlas (the sign atlas is full), see vendTex.js.
+ */
+export function mural(g, w, h) {
+  const rnd = seeded(404);
+  const sky = g.createLinearGradient(0, 0, 0, h);
+  sky.addColorStop(0, '#9fcbef'); sky.addColorStop(1, '#e6f2fb');
+  g.fillStyle = sky;
+  g.fillRect(0, 0, w, h);
+  blotches(g, w, h, rnd, '#ffffff', 8, 0.12, 0.35);
+  // sun + clouds
+  g.fillStyle = '#ffd86a'; g.beginPath(); g.arc(w * 0.88, h * 0.22, h * 0.12, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#ffffff';
+  for (const [cx, cy, r] of [[0.18, 0.2, 0.08], [0.24, 0.17, 0.1], [0.3, 0.21, 0.07], [0.6, 0.14, 0.06], [0.65, 0.12, 0.08]]) { g.beginPath(); g.arc(w * cx, h * cy, h * r, 0, Math.PI * 2); g.fill(); }
+  // rolling green hill (the levee) + river line
+  g.fillStyle = '#9cc27a';
+  g.beginPath(); g.moveTo(0, h * 0.62); g.bezierCurveTo(w * 0.3, h * 0.5, w * 0.6, h * 0.66, w, h * 0.55); g.lineTo(w, h); g.lineTo(0, h); g.fill();
+  g.fillStyle = '#8fc3e6'; g.fillRect(0, h * 0.86, w, h * 0.06);
+  // sakura trees (round pink puffs with brown trunks), slightly wobbly like a child's brush
+  for (let i = 0; i < 7; i++) {
+    const x = w * (0.06 + i * 0.145) + (rnd() - 0.5) * 10, y = h * (0.52 + Math.sin(i * 1.7) * 0.04);
+    g.fillStyle = '#8a6446'; g.fillRect(x - 3, y, 6, h * 0.16);
+    g.fillStyle = i % 2 ? '#f7b6c8' : '#f9c9d6';
+    for (let k = 0; k < 4; k++) { g.beginPath(); g.arc(x + (rnd() - 0.5) * 22, y - 8 + (rnd() - 0.5) * 12, 13 + rnd() * 6, 0, Math.PI * 2); g.fill(); }
+  }
+  // the little Harukaze train running across the hill
+  g.fillStyle = '#f5f1e6'; roundRect(g, w * 0.34, h * 0.64, w * 0.3, h * 0.12, 8); g.fill();
+  g.fillStyle = '#ef8fae'; g.fillRect(w * 0.34, h * 0.72, w * 0.3, h * 0.025);
+  g.fillStyle = '#7fb0d8'; for (let i = 0; i < 6; i++) { roundRect(g, w * 0.35 + i * w * 0.048, h * 0.66, w * 0.034, h * 0.04, 2); g.fill(); }
+  g.fillStyle = '#555'; for (let i = 0; i < 4; i++) { g.beginPath(); g.arc(w * (0.37 + i * 0.08), h * 0.77, 4, 0, Math.PI * 2); g.fill(); }
+  // flowers in the foreground
+  for (let i = 0; i < 26; i++) {
+    const x = rnd() * w, y = h * (0.8 + rnd() * 0.18);
+    g.fillStyle = ['#e8434f', '#f2c230', '#ffffff', '#b99ee0'][i % 4];
+    g.beginPath(); g.arc(x, y, 3 + rnd() * 2, 0, Math.PI * 2); g.fill();
+  }
+  // title + credit in rounded "handwriting"
+  fitText(g, 'みんなの さくらがおか', w * 0.04, h * 0.03, w * 0.5, h * 0.16, { font: FONTS.round, weight: 800, color: '#d9668d', stroke: { color: '#ffffff', width: 6 } });
+  fitText(g, '桜ヶ丘小学校 6年生', w * 0.62, h * 0.9, w * 0.36, h * 0.09, { font: FONTS.round, weight: 700, color: '#5a3a26', align: 'right' });
+  // painted border
+  g.strokeStyle = '#ffffff'; g.lineWidth = 6; g.strokeRect(3, 3, w - 6, h - 6);
+}
+
 /** Build the signs & misc atlas.  Returns { texture, r(name) }. */
 export function makeSignAtlas() {
   const A = new Atlas(2048, 2048, 'signs');

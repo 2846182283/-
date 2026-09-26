@@ -326,9 +326,10 @@ export function roundTable(S, x, y, z, o = {}) {
   const B = S.B;
   const top = o.h || 0.72, r = o.r || 0.32;
   const kind = o.kind || 'solid';
-  B.cyl(kind, x, y, z, 0.2, 0.03, o.base || '#3a3a40', { seg: 10 });
-  B.cyl(kind, x, y, z, 0.025, top - 0.03, o.base || '#3a3a40', { seg: 6 });
-  B.cyl(kind, x, y + top - 0.03, z, r, 0.03, o.top || '#f2ede2', { seg: 16 });
+  B.cyl(kind, x, y, z, 0.2, 0.03, o.base || '#3a3a40', { rb: 0.22, seg: 18 });
+  B.cyl(kind, x, y, z, 0.025, top - 0.03, o.base || '#3a3a40', { seg: 8 });
+  B.cyl(kind, x, y + top - 0.05, z, 0.07, 0.02, o.base || '#3a3a40', { seg: 10 });
+  B.cyl(kind, x, y + top - 0.03, z, r, 0.03, o.top || '#f2ede2', { seg: 28 });
 }
 
 /** Metal bistro chair facing direction ry (seat front = +Z after ry). */
@@ -339,7 +340,7 @@ export function bistroChair(S, x, y, z, ry, o = {}) {
   B.pushT(x, y, z, ry);
   const sh = 0.45;
   for (const [lx, lz] of [[-0.17, -0.17], [0.17, -0.17], [-0.17, 0.17], [0.17, 0.17]]) B.beam(kind, [lx * 1.1, 0, lz * 1.1], [lx, sh, lz], 0.022, 0.022, col);
-  B.cyl(kind, 0, sh, 0, 0.21, 0.035, o.seat || col, { seg: 12 });
+  B.cyl(kind, 0, sh, 0, 0.21, 0.035, o.seat || col, { seg: 20 });
   // back
   B.beam(kind, [-0.17, sh, -0.17], [-0.16, sh + 0.42, -0.2], 0.022, 0.022, col);
   B.beam(kind, [0.17, sh, -0.17], [0.16, sh + 0.42, -0.2], 0.022, 0.022, col);
@@ -480,7 +481,7 @@ export function bloomCluster(S, x, y, z, rad, n, cols, size = 0.045, o = {}) {
   if (o.leaves !== false) B.sphere('solid', x, y - size, z, rad * 0.95, o.leafCol || '#6f9e58', { w: 9, h: 6, sy: 0.6 });
   for (let i = 0; i < n; i++) {
     const a = rng() * Math.PI * 2, rr = Math.sqrt(rng()) * rad;
-    B.sphere(o.kind || 'solid', x + Math.cos(a) * rr, y + rng() * size * 1.5, z + Math.sin(a) * rr, size * (0.8 + rng() * 0.4), cols[Math.floor(rng() * cols.length)], { ico: 0 });
+    B.sphere(o.kind || 'solid', x + Math.cos(a) * rr, y + rng() * size * 1.5, z + Math.sin(a) * rr, size * (0.8 + rng() * 0.4), cols[Math.floor(rng() * cols.length)], { ico: 1, sy: 0.85 });
   }
 }
 

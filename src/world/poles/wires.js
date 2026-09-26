@@ -33,7 +33,7 @@ const segsFor = (L) => Math.max(6, Math.min(16, Math.round(L / 1.7)));
 
 /**
  * @param {object} K        kit
- * @param {Array} links     [{A, B, kind: 'full'|'hv'|'cross', seed}] with A/B = pole attach objects
+ * @param {Array} links     [{A, B, kind: 'full'|'hv'|'tel'|'cross', seed}] with A/B = pole attach objects
  * @param {Array} drops     [{pole, target: Vector3, wallDir: Vector3, tel: bool, seed}]
  * @param {Array} extras    [{pts, r}] polylines from the poles
  * @param {function} rng
@@ -64,6 +64,16 @@ export function buildWires(K, links, drops, extras, rng) {
       }
       // closures hanging on the thick telecom cable, near one end
       if (lk.closure) closure(K, A.tel[0], B.tel[0], 0.021 * L + 0.2, lk.closureT);
+    }
+    if (lk.kind === 'tel') {
+      // telecom-only span (thick + thin cable, optical on some, a closure)
+      const pa = A.localPt(0, 0, 0), pb = B.localPt(0, 0, 0);
+      const a0 = A.telToward(pb, 0), b0 = B.telToward(pa, 0);
+      const a1 = A.telToward(pb, 1), b1 = B.telToward(pa, 1);
+      const Lt = a0.distanceTo(b0);
+      add(a0, b0, 0.021 * Lt + 0.22 + j(), 0.027, 'tel');
+      add(a1, b1, 0.018 * Lt + 0.17 + j(), 0.019, 'tel');
+      if (lk.closure) closure(K, a0, b0, 0.021 * Lt + 0.22, 1 - lk.closureT);
     }
     if (lk.kind === 'cross') {
       // cross-street span: road-side LV spool + lower telecom + (optional) HV pair on the cross arms

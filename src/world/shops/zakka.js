@@ -123,9 +123,14 @@ function apron(S, F, Z) {
   const g = (x, z) => S.gy(x, z);
   // chest freezer with a sliding glass top + ice cream flag
   const fx = -2.3, fz = Z + 0.5, fy = g(fx, fz);
-  B.box('solid', fx - 0.62, fy, fz - 0.33, fx + 0.62, fy + 0.82, fz + 0.33, '#f4f6f6', { rect: A.get('zFreezer'), face: 'Z' });
-  B.box('solid', fx - 0.62, fy + 0.82, fz - 0.33, fx + 0.62, fy + 0.86, fz + 0.33, '#c9ccd0');
-  B.quad('lit', fx, fy + 0.835, fz, 1.1, 0.56, '#dfeaf0', A.get('zIceTop'), { rx: -Math.PI / 2 });
+  B.box('solid', fx - 0.62, fy, fz - 0.33, fx + 0.62, fy + 0.82, fz + 0.33, '#f4f6f6', { rect: A.get('zFreezer'), face: 'Z', skip: 'Y' });
+  // lid rim (open frame) around the sliding glass, lit tubs of ice cream visible below
+  B.box('solid', fx - 0.62, fy + 0.82, fz - 0.33, fx + 0.62, fy + 0.86, fz - 0.28, '#c9ccd0');
+  B.box('solid', fx - 0.62, fy + 0.82, fz + 0.28, fx + 0.62, fy + 0.86, fz + 0.33, '#c9ccd0');
+  B.box('solid', fx - 0.62, fy + 0.82, fz - 0.28, fx - 0.57, fy + 0.86, fz + 0.28, '#c9ccd0');
+  B.box('solid', fx + 0.57, fy + 0.82, fz - 0.28, fx + 0.62, fy + 0.86, fz + 0.28, '#c9ccd0');
+  B.box('solid', fx - 0.012, fy + 0.83, fz - 0.28, fx + 0.012, fy + 0.87, fz + 0.28, '#c9ccd0');
+  B.quad('lit', fx, fy + 0.78, fz, 1.12, 0.54, '#dfeaf0', A.get('zIceTop'), { rx: -Math.PI / 2 });
   B.quad('glass', fx, fy + 0.865, fz, 1.14, 0.6, '#fff', null, { rx: -Math.PI / 2 });
   for (const sx of [-1, 1]) B.box('solid', fx - 0.62, fy + 0.02, fz + sx * 0.32 - 0.02, fx - 0.5, fy + 0.1, fz + sx * 0.32 + 0.02, '#8e949a');
   nobori(S, -3.4, g(-3.4, Z + 0.95), Z + 0.95, A.get('zIceFlag'), { ry: 0.2, h: 1.7, w: 0.42 });
@@ -172,7 +177,20 @@ function interior(S, F, Z) {
   B.box('inner', 2.6, F + 0.9, zb + 0.75, 2.9, F + 1.3, zb + 1.05, '#8a6446');
   // hanging goods: sandals & fly swatters on a rail by the door
   B.box('inner', -3.2, F + 2.2, Z - 0.8, -1.2, F + 2.23, Z - 0.77, '#8e949a');
-  for (let i = 0; i < 6; i++) B.box('inner', -3.1 + i * 0.33, F + 1.75, Z - 0.8, -2.9 + i * 0.33, F + 2.2, Z - 0.78, ['#3b7fd1', '#e8483f', '#f2c230', '#3aa37a'][i % 4]);
+  // hanging goods on the rail: pairs of beach sandals and fly swatters
+  for (let i = 0; i < 6; i++) {
+    const hx = -3.0 + i * 0.33, col = ['#3b7fd1', '#e8483f', '#f2c230', '#3aa37a'][i % 4];
+    B.box('inner', hx - 0.004, F + 2.0, Z - 0.8, hx + 0.004, F + 2.2, Z - 0.79, '#666');
+    if (i % 2 === 0) {
+      for (const sx of [-0.055, 0.055]) {
+        B.box('inner', hx + sx - 0.045, F + 1.72, Z - 0.81, hx + sx + 0.045, F + 1.99, Z - 0.785, col);
+        B.box('inner', hx + sx - 0.035, F + 1.9, Z - 0.785, hx + sx + 0.035, F + 1.92, Z - 0.77, '#f4f4f0');
+      }
+    } else {
+      B.box('inner', hx - 0.012, F + 1.78, Z - 0.8, hx + 0.012, F + 2.0, Z - 0.79, '#f4f4f0');
+      B.box('inner', hx - 0.08, F + 1.6, Z - 0.8, hx + 0.08, F + 1.78, Z - 0.792, col);
+    }
+  }
   ceilingLight(S, 0, ceil, Z - 1.8, 2.2, 0.12, '#f4f8f4');
   ceilingLight(S, 0, ceil, Z - 3.8, 2.2, 0.12, '#f4f8f4');
   pendant(S, 2.3, ceil, zb + 0.9, 0.7, { style: 'bulb' });

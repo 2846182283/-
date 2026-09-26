@@ -182,24 +182,46 @@ function jizo(kit, rng) {
   const sp = SPOTS.jizo;
   const s = surfaceY(sp.x, sp.z, sp.y);
   kit.push(kit.mtx(sp.x, sp.y + s, sp.z, 0, sp.rotY));
-  const stone = kit.S('stoneDark');
-  // slab over the gutter, pedestal
-  kit.box(0.7, 0.06, 0.5, 0, 0, -0.08, 'texS', '#ffffff', { bottom: true, region: kit.S('stone') });
-  kit.box(0.4, 0.16, 0.34, 0, 0.06, -0.12, 'texS', '#ffffff', { bottom: true, region: stone });
-  kit.cyl(0.19, 0.2, 0.06, 0, 0.22, -0.12, 'texS', '#ffffff', { seg: 12, region: stone });
-  // body: rounded capsule, head, face
-  kit.lathe([[0, 0], [0.13, 0], [0.15, 0.1], [0.15, 0.3], [0.13, 0.4], [0.08, 0.45], [0, 0.46]], 0, 0.28, -0.12, 'texS', '#f4f2ec', { seg: 14, region: stone });
-  kit.sphere(0.11, 0, 0.83, -0.12, 'texS', '#f8f6f0', { ws: 12, hs: 8, region: stone });
-  for (const sx of [-1, 1]) kit.box(0.035, 0.005, 0.004, sx * 0.04, 0.85, -0.015, 'vc', '#5a5650', { rz: sx * 0.2, no: true, cast: false });
+  const stone = kit.S('stone');
+  const granite = '#e6e3dc';
+  // slab over the gutter, two-tier pedestal with a lotus-like disc
+  kit.box(0.72, 0.06, 0.52, 0, 0, -0.08, 'texS', '#ffffff', { bottom: true, region: stone });
+  kit.box(0.42, 0.13, 0.36, 0, 0.06, -0.12, 'texS', '#d6d3cb', { bottom: true, region: stone });
+  kit.cyl(0.18, 0.2, 0.07, 0, 0.19, -0.12, 'texS', granite, { seg: 16, region: stone });
+  // body: a short rounded capsule, big round head (cute proportions, ~70 cm tall)
+  const b0 = 0.26;
+  kit.lathe([[0, 0], [0.13, 0], [0.145, 0.08], [0.145, 0.26], [0.12, 0.36], [0.07, 0.4], [0, 0.41]], 0, b0, -0.12, 'texS', granite, { seg: 18, region: stone });
+  const hy = b0 + 0.49, hz = -0.12, hr = 0.12;
+  kit.sphere(hr, 0, hy, hz, 'texS', '#f2f0ea', { ws: 18, hs: 12, region: stone });
+  // peaceful face: closed-eye arcs, tiny nose, soft smile (thin dark strokes, no outline)
+  const face = '#6a655c';
+  const onHead = (x, y) => hz + Math.sqrt(Math.max(0, hr * hr - x * x - (y - hy) * (y - hy))) - 0.002;
+  for (const sx of [-1, 1]) kit.torus(0.026, 0.005, sx * 0.047, hy + 0.012, onHead(sx * 0.045, hy + 0.012), 'vc', face, { rz: Math.PI, ry: sx * -0.38, arc: Math.PI, rs: 3, ts: 8, no: true, cast: false });
+  kit.sphere(0.008, 0, hy - 0.02, onHead(0, hy - 0.02) + 0.004, 'texS', '#f2f0ea', { ws: 6, hs: 4, region: stone, no: true, cast: false });
+  kit.torus(0.022, 0.0045, 0, hy - 0.035, onHead(0, hy - 0.05), 'vc', '#a0645a', { rz: Math.PI, rx: 0.5, arc: Math.PI, rs: 3, ts: 8, no: true, cast: false });
   // hands together + shakujo staff
-  kit.sphere(0.035, 0, 0.6, 0.02, 'texS', '#f4f2ec', { ws: 8, hs: 6, region: stone, no: true });
-  kit.beam([0.13, 0.3, -0.03], [0.1, 0.95, -0.02], 0.01, 'vc', '#9a9486', { seg: 4, no: true });
-  // red bib (maekake) + knitted cap
-  kit.cyl(0.17, 0.17, 0.015, 0, 0.62, -0.06, 'vc', RED, { rx: Math.PI / 2 - 0.3, center: true, seg: 16, t0: Math.PI / 2, tl: Math.PI });
-  kit.cyl(0.155, 0.155, 0.06, 0, 0.68, -0.12, 'vc', RED, { seg: 14, open: false });
-  kit.sphere(0.115, 0, 0.87, -0.12, 'vc', '#e0584a', { ws: 12, hs: 6, thetaLen: Math.PI * 0.45 });
-  kit.sphere(0.03, 0, 0.99, -0.12, 'vc', '#f4f2ec', { ws: 6, hs: 4, no: true });
-  // offerings: cup of water, two vases with flowers, a coin
+  kit.sphere(0.035, 0, b0 + 0.27, 0.025, 'texS', granite, { ws: 8, hs: 6, region: stone, no: true });
+  kit.beam([0.13, b0 + 0.02, -0.03], [0.1, b0 + 0.66, -0.02], 0.01, 'vc', '#9a9486', { seg: 4, no: true });
+  kit.torus(0.025, 0.004, 0.1, b0 + 0.68, -0.02, 'metal', '#b9a37a', { rs: 3, ts: 8, no: true, cast: false });
+  // red bib (maekake) + knitted cap with a pom-pom
+  kit.cyl(0.165, 0.165, 0.014, 0, b0 + 0.33, -0.065, 'vc', RED, { rx: Math.PI / 2 - 0.3, center: true, seg: 16, t0: Math.PI / 2, tl: Math.PI });
+  kit.cyl(0.14, 0.145, 0.05, 0, b0 + 0.37, -0.12, 'vc', RED, { seg: 16 });
+  kit.sphere(hr + 0.006, 0, hy + 0.012, hz, 'vc', '#e0584a', { ws: 16, hs: 6, thetaLen: Math.PI * 0.42 });
+  kit.cyl(hr - 0.004, hr + 0.004, 0.022, 0, hy + 0.012, hz, 'vc', '#c9483c', { seg: 16, no: true });
+  kit.sphere(0.03, 0, hy + hr + 0.02, hz, 'vc', '#f4f2ec', { ws: 8, hs: 6, no: true });
+  // little wooden shelter (雨よけ) on two back posts
+  const wood = kit.S('wood');
+  const pz = -0.3, roofY = 1.28;
+  for (const sx of [-1, 1]) kit.box(0.06, roofY - 0.06, 0.06, sx * 0.36, 0.06, pz, 'texS', '#8a6446', { bottom: true, region: wood });
+  kit.box(0.8, 0.06, 0.06, 0, roofY - 0.05, pz, 'texS', '#7a5a3e', { region: wood });
+  kit.box(0.06, 0.05, 0.42, 0, roofY - 0.02, pz + 0.18, 'texS', '#7a5a3e', { region: wood }); // ridge bracket
+  const rise = 0.14, half = 0.34, ang = Math.atan2(rise, half);
+  for (const sz of [-1, 1]) {
+    const L = Math.hypot(half, rise) + 0.04;
+    kit.box(0.92, 0.035, L, 0, roofY + rise / 2, pz + 0.2 + sz * (half / 2 + 0.01), 'texS', '#6a4e3a', { rx: sz * ang, region: wood });
+  }
+  kit.box(0.96, 0.05, 0.06, 0, roofY + rise + 0.015, pz + 0.2, 'vc', '#5b4332');
+  // offerings: cup of water, two vases with flowers, a coin, a small bottle of tea
   kit.cyl(0.03, 0.022, 0.035, 0, 0.06, 0.1, 'vc', '#ffffff', { seg: 10, no: true });
   for (const sx of [-1, 1]) {
     kit.cyl(0.03, 0.026, 0.12, sx * 0.25, 0.06, 0.02, 'vc', '#8fa6c0', { seg: 10 });
@@ -209,7 +231,8 @@ function jizo(kit, rng) {
       kit.sphere(0.025, fx, 0.31 + rng() * 0.05, fz, 'vc', ['#f2c230', '#ffffff', '#d9668d', '#b99ee0'][k], { ws: 6, hs: 4, no: true, cast: false });
     }
   }
-  kit.cyl(0.012, 0.012, 0.003, 0.08, 0.28, 0.02, 'metal', '#c9a36a', { seg: 8, no: true, cast: false });
+  kit.cyl(0.012, 0.012, 0.003, 0.08, 0.26, 0.02, 'metal', '#c9a36a', { seg: 8, no: true, cast: false });
+  kit.lathe([[0, 0], [0.028, 0], [0.028, 0.1], [0.015, 0.125], [0.011, 0.14], [0, 0.14]], -0.13, 0.06, 0.1, 'vc', '#b7c96a', { seg: 8, no: true });
   kit.pop();
 }
 

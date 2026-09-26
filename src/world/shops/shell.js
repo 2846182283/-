@@ -6,7 +6,7 @@
  * Lot-local frame: footprint centred on the origin, front wall outer face at
  * z = +D/2, y = 0 is the ground at the lot front centre (lot.y).
  */
-import { houseWindow, downpipe, acUnit, C, shadeHex } from './parts.js';
+import { houseWindow, acUnit, C, shadeHex } from './parts.js';
 
 /**
  * Wall slab with rectangular holes, decomposed into a grid of boxes.
@@ -98,8 +98,15 @@ export function gableRoof(S, W, D, yEave, rise, color, o = {}) {
     const zg = half + oz + 0.02, yg = yEave - oz * Math.tan(a) - t - 0.02;
     B.box('solid', -W / 2 - ox, yg - 0.1, zg - 0.02, W / 2 + ox, yg, zg + 0.1, o.gutterCol || '#8e949a');
     if (o.downpipe !== false) {
-      const xp = (o.downpipeX ?? 1) * (W / 2 + ox - 0.12);
-      downpipe(S, xp, S.minGround, yg - 0.05, zg - 0.06, o.gutterCol || '#8e949a');
+      // outlet at the gutter end, elbow back to the side wall, then down the front corner
+      const sx = Math.sign(o.downpipeX ?? 1) || 1;
+      const col = o.gutterCol || '#8e949a';
+      const xg = sx * (W / 2 + ox - 0.12), xw = sx * (W / 2 + 0.08), zw = half - 0.2;
+      const yk = yg - 0.45;
+      B.tube('solid', [[xg, yg - 0.02, zg - 0.06], [xg, yg - 0.15, zg - 0.06], [xw, yk, zw], [xw, yk - 0.12, zw]], 0.035, col, { radial: 6 });
+      B.cyl('solid', xw, S.minGround, zw, 0.035, yk - 0.1 - S.minGround, col, { seg: 6 });
+      for (let yy = S.minGround + 0.8; yy < yk - 0.3; yy += 1.4) B.box('deco', sx > 0 ? W / 2 : xw - 0.05, yy, zw - 0.05, sx > 0 ? xw + 0.05 : -W / 2, yy + 0.03, zw + 0.05, col);
+      B.box('solid', xw - 0.05, S.minGround, zw - 0.05, xw + 0.05, S.minGround + 0.05, zw + 0.16, col); // shoe
     }
   }
   return { top: yEave + rise, eaveY: yEave - oz * Math.tan(a) };

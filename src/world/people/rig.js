@@ -128,7 +128,6 @@ const _c = new THREE.Vector3();
 const _d = new THREE.Vector3();
 const _u = new THREE.Vector3();
 const _n = new THREE.Vector3();
-const _m = new THREE.Matrix4();
 const _S = new THREE.Vector3();
 const _E = new THREE.Vector3();
 const _U = new THREE.Vector3();
@@ -236,4 +235,3 @@ export function vnoise(t, seed = 0) {
   return h(i) * (1 - u) + h(i + 1) * u;
 }
 
-export { _m as __tmpMatrix };

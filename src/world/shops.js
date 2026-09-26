@@ -71,8 +71,8 @@ function chunkOf(lot) {
 }
 
 /** Glass tuned for shop fronts: bluish-grey reflection, interior clearly visible. */
-function shopGlass(toon) {
-  const m = toon.glass({ tint: '#8ea6ba', opacity: 0.2, sheen: 0.22 });
+function shopGlass(toon, opacity = 0.2, sheen = 0.22) {
+  const m = toon.glass({ tint: '#8ea6ba', opacity, sheen });
   m.uniforms.skyHorizon.value.set('#a9bdd0');
   m.uniforms.skyTop.value.set('#7fa2cc');
   m.uniforms.groundRefl.value.set('#72757e');
@@ -105,6 +105,7 @@ export default async function build(ctx) {
     rows: { uv: 'metric', scale: 1 },
     lit: { uv: 'atlas' },
     glass: { uv: 'atlas' },
+    glassClear: { uv: 'atlas' },
     cloth: { uv: 'atlas', sway: true, double: true },
     cut: { uv: 'atlas', sway: true, double: true },
     inner: { uv: 'atlas' },
@@ -117,6 +118,8 @@ export default async function build(ctx) {
     rows: { material: toon.mat('#ffffff', { map: rows, vertexColors: true, name: 'shops-rows' }), castShadow: true },
     lit: { material: toon.unlit('#ffffff', { map: atlasTex, vertexColors: true, name: 'shops-lit' }), noOutline: true },
     glass: { material: shopGlass(toon), noOutline: true },
+    // konbini floor-to-ceiling glass: thinner so the bright interior reads from oblique angles
+    glassClear: { material: shopGlass(toon, 0.1, 0.16), noOutline: true },
     cloth: { material: toon.mat('#ffffff', { map: atlasTex, vertexColors: true, side: THREE.DoubleSide, vertexPatch: SWAY_PATCH, name: 'shops-cloth' }), castShadow: true },
     cut: { material: toon.mat('#ffffff', { map: atlasTex, vertexColors: true, side: THREE.DoubleSide, alphaTest: 0.5, vertexPatch: SWAY_PATCH, name: 'shops-cut' }), noOutline: true },
     inner: { material: toon.mat('#ffffff', { map: atlasTex, vertexColors: true, emissive: '#4a3a26', name: 'shops-inner' }), castShadow: false },

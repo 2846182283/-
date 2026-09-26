@@ -9,10 +9,9 @@
  * hem, collar flap) that lift off the body for a clean silhouette.
  */
 import * as THREE from 'three';
-import { loft, ellipsoid, M, mix, clip } from './mesh.js';
+import { loft, ellipsoid, M, mix, ss } from './mesh.js';
 import { FACE } from './atlas.js';
 
-const ss = THREE.MathUtils.smoothstep;
 const lerp = THREE.MathUtils.lerp;
 
 /** Anime head (cranium + tapered jaw), head-local: origin at the cranium centre. */
@@ -323,29 +322,45 @@ export function buildSkirt(RM, P, o) {
   rings.reverse(); // loft wants increasing y
   const seg = o.pleats ? o.pleats * 2 : 24;
   const g = loft(rings, { seg, pleats: o.pleats || 0, capBottom: false, capTop: false });
-  const span = top - hem;
-  const skin = (p) => {
-    const t = THREE.MathUtils.clamp((top - p.y) / span, 0, 1);
-    const k = ss(t, 0.25, 1) * 0.75;
+  // loft 'along' runs 0 (hem) .. 1 (waist); u = 1 - along is the depth down the skirt
+  if (o.billow) billowSkirt(g, o.billow);
+  const skin = (p, a) => {
+    const k = ss(1 - a, 0.25, 1) * 0.75;
     const l = ss(p.x, -0.05, 0.05);
     return [['hips', 1 - k], ['thigh_L', k * l], ['thigh_R', k * (1 - l)]];
   };
-  const flut = (p) => {
-    const t = THREE.MathUtils.clamp((top - p.y) / span, 0, 1);
-    return (o.flut ?? 0.03) * t * t;
-  };
+  const flut = (p, a) => (o.flut ?? 0.03) * (1 - a) * (1 - a);
+  const base = new THREE.Color(o.color);
+  const trim = o.trim ? new THREE.Color(o.trim) : null;
   RM.add(g, {
     bone: skin, flut,
-    color: (p) => {
-      const t = THREE.MathUtils.clamp((top - p.y) / span, 0, 1);
-      return new THREE.Color(o.color).multiplyScalar(1 - 0.06 * t);
-    },
+    color: (p, n, a) => (trim && a < 0.07 ? trim : base.clone().multiplyScalar(1 - 0.06 * (1 - a))),
   });
   if (o.lining) {
     // inner surface (seen when the hem lifts): same shape, flipped, darker
     RM.add(g, { bone: skin, flut, color: o.lining, flip: true });
   }
   return rings;
+}
+
+/**
+ * Wind-caught skirt: the downwind half of the hem lifts and swings outward
+ * (strongest at the hem, nothing at the waist) so the silhouette reads as a
+ * gust even in a still frame.  b: { x, z } downwind direction (model space), amt (m).
+ */
+function billowSkirt(g, b) {
+  const pos = g.attributes.position, along = g.attributes.along;
+  const len = Math.hypot(b.x, b.z) || 1;
+  const dx = b.x / len, dz = b.z / len;
+  for (let i = 0; i < pos.count; i++) {
+    const u = 1 - along.getX(i);
+    const x = pos.getX(i), z = pos.getZ(i);
+    const r = Math.hypot(x, z) || 1;
+    const side = Math.max(0, (x * dx + z * dz) / r); // 0 upwind .. 1 downwind
+    const k = u * u * side * side * b.amt;
+    pos.setXYZ(i, x + dx * k * 0.8, pos.getY(i) + k * 0.9, z + dz * k * 0.8);
+  }
+  g.computeVertexNormals();
 }
 
 /** Jacket / coat hem: a short flared shell over the hips (skinned like a skirt). */
@@ -389,4 +404,3 @@ export function buildTexturedHem(RM, P, torso, rect, o) {
   RM.add(g, { color: o.lining || '#3a3848', flip: true, bone: 'hips' });
 }
 
-export { clip };

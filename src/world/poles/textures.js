@@ -494,52 +494,78 @@ function drawSubPlate(text, opts = {}) {
   };
 }
 
-/** Convex mirror: a small fish-eye painting of the street corner. */
+/**
+ * Convex mirror: a small fish-eye painting of the street corner — bowed
+ * horizon, a road bending away to an off-centre vanishing point, buildings
+ * leaning outward at the rim, a pole curving along the right edge.
+ * Composition is deliberately asymmetric (no face-like pareidolia).
+ */
 function drawMirror(c, w, h) {
   const r = w / 2;
   c.fillStyle = '#9aa1a8';
   c.fillRect(0, 0, w, h);
   c.save();
   c.beginPath(); c.arc(r, r, r, 0, Math.PI * 2); c.clip();
-  const sky = c.createLinearGradient(0, 0, 0, h * 0.55);
-  sky.addColorStop(0, '#8fbbea'); sky.addColorStop(1, '#e3edf6');
+  // sky
+  const sky = c.createLinearGradient(0, 0, 0, h * 0.5);
+  sky.addColorStop(0, '#86b4e6'); sky.addColorStop(1, '#e6eef7');
   c.fillStyle = sky; c.fillRect(0, 0, w, h);
-  // curved road + pavement (fish-eye: horizon bows upward)
-  c.fillStyle = '#a3a5aa';
-  c.beginPath(); c.moveTo(0, h * 0.6); c.quadraticCurveTo(r, h * 0.38, w, h * 0.6); c.lineTo(w, h); c.lineTo(0, h); c.fill();
-  c.fillStyle = '#86898f';
-  c.beginPath(); c.moveTo(w * 0.18, h); c.quadraticCurveTo(r, h * 0.42, w * 0.82, h); c.fill();
-  c.strokeStyle = '#f4f3ee'; c.lineWidth = 3;
-  c.beginPath(); c.moveTo(w * 0.28, h); c.quadraticCurveTo(r, h * 0.46, w * 0.72, h); c.stroke();
-  // buildings bending around the edges
-  const bld = (x0, x1, top, col, roof) => {
-    c.fillStyle = col;
-    c.beginPath(); c.moveTo(x0, h * 0.62); c.quadraticCurveTo((x0 + x1) / 2, top - 6, x1, h * 0.55); c.lineTo(x1, h * 0.62); c.fill();
-    c.fillStyle = roof;
-    c.beginPath(); c.moveTo(x0 - 4, top + 14); c.quadraticCurveTo((x0 + x1) / 2, top - 12, x1 + 4, top + 8); c.lineTo(x1 + 4, top + 16); c.quadraticCurveTo((x0 + x1) / 2, top - 2, x0 - 4, top + 22); c.fill();
-  };
-  bld(-10, 70, 60, '#f2e6cf', '#5f6670');
-  bld(186, 266, 64, '#e8dcc4', '#56677a');
-  bld(62, 110, 96, '#f6f3ec', '#6c5647');
-  // sakura blob + a pole leaning with the lens distortion
-  c.fillStyle = '#f9c3d3';
-  c.beginPath(); c.ellipse(158, 92, 40, 26, -0.2, 0, Math.PI * 2); c.fill();
-  c.fillStyle = '#fde0e8';
-  c.beginPath(); c.ellipse(150, 84, 24, 14, -0.2, 0, Math.PI * 2); c.fill();
-  c.strokeStyle = '#8c8a86'; c.lineWidth = 5;
-  c.beginPath(); c.moveTo(214, 150); c.quadraticCurveTo(222, 80, 240, 30); c.stroke();
-  c.strokeStyle = '#2d3035'; c.lineWidth = 1.3;
-  c.beginPath(); c.moveTo(0, 50); c.quadraticCurveTo(128, 20, 256, 44); c.stroke();
-  c.beginPath(); c.moveTo(0, 62); c.quadraticCurveTo(128, 34, 256, 58); c.stroke();
+  // soft cloud
+  c.fillStyle = 'rgba(255,255,255,0.8)';
+  c.beginPath(); c.ellipse(w * 0.3, h * 0.2, 46, 12, -0.15, 0, Math.PI * 2); c.fill();
+  // ground (bowed horizon)
+  const vx = w * 0.58, vy = h * 0.47; // vanishing point, off-centre
+  c.fillStyle = '#c9c6bf';
+  c.beginPath(); c.moveTo(0, h * 0.58); c.quadraticCurveTo(vx, h * 0.38, w, h * 0.56); c.lineTo(w, h); c.lineTo(0, h); c.fill();
+  // distant low houses along the horizon
+  const far = [[0.2, 0.43, 34, 16, '#f2e6cf', '#56677a'], [0.36, 0.41, 26, 14, '#e8dcc4', '#5f6670'], [0.72, 0.42, 30, 15, '#f6f3ec', '#6c5647']];
+  for (const [fx, fy, bw, bh, wall, roof] of far) {
+    c.fillStyle = wall; c.fillRect(fx * w, fy * h, bw, bh);
+    c.fillStyle = roof; c.fillRect(fx * w - 2, fy * h - 4, bw + 4, 5);
+  }
+  // sakura canopy peeking over the houses (upper left of centre)
+  c.fillStyle = '#f7c2d2';
+  c.beginPath(); c.ellipse(w * 0.3, h * 0.36, 30, 16, 0.1, 0, Math.PI * 2); c.fill();
+  c.fillStyle = '#fde2ea';
+  c.beginPath(); c.ellipse(w * 0.27, h * 0.33, 16, 8, 0.1, 0, Math.PI * 2); c.fill();
+  // road: wide at the bottom, bending away to the vanishing point
+  c.fillStyle = '#8d9096';
+  c.beginPath();
+  c.moveTo(w * 0.02, h); c.quadraticCurveTo(w * 0.34, h * 0.62, vx - 6, vy);
+  c.lineTo(vx + 6, vy); c.quadraticCurveTo(w * 0.9, h * 0.66, w * 1.02, h * 0.9); c.lineTo(w, h); c.fill();
+  c.strokeStyle = '#f4f3ee'; c.lineWidth = 2.5;
+  c.beginPath(); c.moveTo(w * 0.14, h); c.quadraticCurveTo(w * 0.4, h * 0.64, vx - 3, vy + 1); c.stroke();
+  c.beginPath(); c.moveTo(w * 0.94, h * 0.9); c.quadraticCurveTo(w * 0.82, h * 0.64, vx + 3, vy + 1); c.stroke();
+  // a white car approaching on the far lane
+  c.fillStyle = '#f7f7f4'; c.fillRect(w * 0.62, h * 0.53, 16, 9);
+  c.fillStyle = '#5c6a7a'; c.fillRect(w * 0.625, h * 0.535, 14, 3);
+  // big near building bending along the left rim
+  c.fillStyle = '#f0e2c8';
+  c.beginPath(); c.moveTo(0, h * 0.22); c.quadraticCurveTo(w * 0.16, h * 0.3, w * 0.2, h * 0.52); c.lineTo(w * 0.17, h * 0.78); c.lineTo(0, h * 0.86); c.fill();
+  c.fillStyle = '#5a6776';
+  c.beginPath(); c.moveTo(0, h * 0.16); c.quadraticCurveTo(w * 0.17, h * 0.24, w * 0.23, h * 0.46); c.lineTo(w * 0.2, h * 0.5); c.quadraticCurveTo(w * 0.15, h * 0.3, 0, h * 0.24); c.fill();
+  c.fillStyle = '#9fb6c8';
+  c.fillRect(w * 0.06, h * 0.4, 14, 18); c.fillRect(w * 0.06, h * 0.62, 14, 16);
+  // right-hand house corner + wall
+  c.fillStyle = '#e4ecef';
+  c.beginPath(); c.moveTo(w, h * 0.3); c.quadraticCurveTo(w * 0.84, h * 0.36, w * 0.8, h * 0.52); c.lineTo(w * 0.83, h * 0.7); c.lineTo(w, h * 0.78); c.fill();
+  c.fillStyle = '#6c5647';
+  c.beginPath(); c.moveTo(w, h * 0.25); c.quadraticCurveTo(w * 0.83, h * 0.31, w * 0.78, h * 0.49); c.lineTo(w * 0.8, h * 0.52); c.quadraticCurveTo(w * 0.85, h * 0.36, w, h * 0.31); c.fill();
+  // utility pole curving along the right edge + two thin grey wires
+  c.strokeStyle = '#a19f99'; c.lineWidth = 6; c.lineCap = 'butt';
+  c.beginPath(); c.moveTo(w * 0.9, h * 0.95); c.quadraticCurveTo(w * 0.93, h * 0.45, w * 0.99, h * 0.08); c.stroke();
+  c.strokeStyle = 'rgba(70,74,82,0.55)'; c.lineWidth = 1;
+  c.beginPath(); c.moveTo(w * 0.96, h * 0.2); c.quadraticCurveTo(w * 0.6, h * 0.16, w * 0.08, h * 0.08); c.stroke();
+  c.beginPath(); c.moveTo(w * 0.95, h * 0.27); c.quadraticCurveTo(w * 0.7, h * 0.3, w * 0.35, h * 0.24); c.stroke();
   c.restore();
-  // glossy highlight arcs + darkened rim (convex look)
-  const rim = c.createRadialGradient(r, r, r * 0.6, r, r, r);
-  rim.addColorStop(0, 'rgba(40,50,70,0)'); rim.addColorStop(1, 'rgba(40,50,70,0.35)');
+  // darkened rim (convex look) + glossy highlight arcs upper left
+  const rim = c.createRadialGradient(r, r, r * 0.62, r, r, r);
+  rim.addColorStop(0, 'rgba(40,50,70,0)'); rim.addColorStop(1, 'rgba(40,50,70,0.32)');
   c.fillStyle = rim; c.beginPath(); c.arc(r, r, r, 0, Math.PI * 2); c.fill();
-  c.strokeStyle = 'rgba(255,255,255,0.85)'; c.lineWidth = 9; c.lineCap = 'round';
-  c.beginPath(); c.arc(r, r, r * 0.8, Math.PI * 1.1, Math.PI * 1.4); c.stroke();
-  c.lineWidth = 4;
-  c.beginPath(); c.arc(r, r, r * 0.66, Math.PI * 1.12, Math.PI * 1.25); c.stroke();
+  c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineWidth = 8; c.lineCap = 'round';
+  c.beginPath(); c.arc(r, r, r * 0.82, Math.PI * 1.08, Math.PI * 1.36); c.stroke();
+  c.lineWidth = 3.5;
+  c.beginPath(); c.arc(r, r, r * 0.69, Math.PI * 1.12, Math.PI * 1.22); c.stroke();
 }
 
 function drawMirrorPlate(line1, line2) {

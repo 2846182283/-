@@ -9,6 +9,7 @@
  * strapped to that pole; otherwise it gets its own galvanised post.  Signs
  * on the main street face the traffic that keeps left (west side -> south,
  * east side -> north); the others use the layout's rotY.
+ * Mirrors are double-headed (二面鏡) so both roads at a corner are covered.
  */
 import * as THREE from 'three';
 import { MAIN_STREET } from '../../core/layout.js';

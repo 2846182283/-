@@ -4,7 +4,7 @@
  * with a few tiny accents (a red sailor scarf, a yellow kindergarten hat).
  */
 import * as THREE from 'three';
-import { loft, M, V3, ellipsoid, strand } from './mesh.js';
+import { loft, M, V3, ellipsoid, strand, ss } from './mesh.js';
 import { torsoShell } from './body.js';
 import { satchel, ecoBag, plasticBag, briefcase, backpack, crossBag, book, phone, sailorScarf, glasses } from './accessories.js';
 import { bicycle } from './bicycle.js';
@@ -12,7 +12,6 @@ import { bicycle } from './bicycle.js';
 export const SKIN = { fair: '#fbe3d3', warm: '#f8dcc9', tan: '#f0cfb8', elder: '#f1d6c6' };
 export const HAIR = { black: '#2e2b35', dark: '#3f3136', brown: '#6b4a3a', chestnut: '#86573f', grey: '#bdb8c2', greyDark: '#8d8a92' };
 const NAVY = '#2c3657';
-const ss = THREE.MathUtils.smoothstep;
 
 // ---- leg helpers -------------------------------------------------------------
 const sockLegs = (skin, sock, topY) => ({ color: (y) => (y < topY ? sock : skin), edges: [{ y: topY, lip: 0.003 }] });
@@ -58,7 +57,7 @@ function sailor(o) {
 }
 
 // ---------------------------------------------------------------------------
-export function recipes(rects) {
+export function recipes() {
   const R = {};
 
   // 車站工作人员 — navy uniform, cap with badge, white gloves
@@ -76,22 +75,24 @@ export function recipes(rects) {
     hem: (P) => ({ hemY: P.crotchY - 0.02, flare: 0.012 }),
   };
 
-  // 推着自行车等道口的少女 — sailor uniform, ponytail, black tights, mint bike
-  R.crossingGirl = {
+  // 推着自行车等道口的少女 — sailor uniform, ponytail, black tights, mint bike.
+  // bikeM: bike frame in her model space (set by cast.js); out.grips receives the
+  // handlebar grip positions (model space, [left, right]) and the saddle top for the hand IK.
+  R.crossingGirl = (bikeM, out) => ({
     id: 'crossGirl',
     ...sailor({
       H: 1.55,
       hair: { style: 'ponytail', color: HAIR.dark, tieColor: '#c25a66', flut: 0.03 },
       eyes: 'open', mouth: 'neutral', face: { lookX: 0.4 },
       legs: tights('#3b3a45'),
-      hands: { R: 'grip', L: 'relaxed' },
+      hands: { R: 'grip', L: 'grip' },
       extras: (kit) => {
-        // the bike stands on her right (-X), front wheel forward
-        const m = new THREE.Matrix4().makeTranslation(-0.5, 0, 0.12);
-        bicycle(kit.RM, kit.D, m, 'root', { color: '#b7d3cb', bagColor: '#3b2f2c' });
+        const b = bicycle(kit.RM, kit.D, bikeM, 'root', { color: '#b7d3cb', bagColor: '#3b2f2c' });
+        out.grips = b.grips;
+        out.saddle = b.saddle;
       },
     }),
-  };
+  });
 
   // 站在自动贩卖机前选饮料的少年 — hoodie, shorts, backpack
   R.vendingBoy = {
@@ -175,7 +176,7 @@ export function recipes(rects) {
     garment: { kind: 'cardigan', base: '#a89fb6', shirt: '#efe7d4', button: '#efe6d2', bulk: 0.016 },
     sleeve: (P) => ({ color: '#a89fb6', end: 'wrist', bulk: 0.014, cuff: [[P.wristY, P.wristY + 0.03, '#978ea6']] }),
     hands: { L: 'grip', R: 'grip' },
-    legs: (P) => ({ color: () => '#e2c7b8', edges: [] }),
+    legs: { color: () => '#e2c7b8', edges: [] }, // skin-toned stockings
     shoes: { color: '#6b5a50', sole: '#3f3530', kind: 'loafer' },
     hem: (P) => ({ hemY: P.hipsY - 0.07, flare: 0.012, gap: 0.016, lining: '#8a8298' }),
     skirt: (P) => ({ color: '#7f7068', hemY: P.kneeY - 0.14, flare: 1.18, flut: 0.012, topY: P.waistY - 0.03 }),
@@ -195,7 +196,10 @@ export function recipes(rects) {
     hands: { L: 'open', R: 'relaxed' },
     legs: (P) => sockLegs(SKIN.fair, '#f6f5f0', P.ankleY + 0.06),
     shoes: { color: '#9a7462', sole: '#5a4034', kind: 'pump' },
-    skirt: (P) => ({ color: '#e3ecf2', hemY: P.kneeY - 0.09, flare: 1.55, flut: 0.075, blow: { x: blowLocal.x * 0.1, z: blowLocal.z * 0.1 }, lift: 0.03, lining: '#c3cfd9', pleats: 0 }),
+    skirt: (P) => ({
+      color: '#e1eaf2', trim: '#c6d5e4', hemY: P.kneeY - 0.09, flare: 1.55, flut: 0.075, pleats: 0, lining: '#c3cfd9',
+      blow: { x: blowLocal.x * 0.1, z: blowLocal.z * 0.1 }, lift: 0.02, billow: { x: blowLocal.x, z: blowLocal.z, amt: 0.16 },
+    }),
     extras: (kit) => crossBag(kit.RM, kit.P, { color: '#c9b49a', side: -1, w: 0.06, h: 0.15, d: 0.2, strap: 0.012 }),
   });
 
@@ -296,4 +300,3 @@ export function recipes(rects) {
   return R;
 }
 
-export { book, NAVY };

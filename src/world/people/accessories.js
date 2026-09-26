@@ -9,7 +9,7 @@
  * helpers take the bone's rest position so props follow the posed hand.
  */
 import * as THREE from 'three';
-import { rbox, ellipsoid, cyl, torus, tube, strand, M, V3, loft } from './mesh.js';
+import { rbox, ellipsoid, torus, tube, strand, M, V3, loft } from './mesh.js';
 
 /** Satchel (学生鞄) hanging from a hand grip; top handle in the fist. */
 export function satchel(RM, rest, bone, o = {}) {
@@ -73,7 +73,7 @@ export function plasticBag(RM, rest, bone, o = {}) {
   const h = rest[bone];
   const y = h.y - 0.22;
   const g = ellipsoid(0.14, 0.13, 0.08, 12, 8, (p) => { if (p.y > 0.06) p.y = 0.06 + (p.y - 0.06) * 0.3; });
-  RM.add(g, { m: M(h.x, y, h.z, 0, o.ry || 0, 0.05), bone, color: '#f4f4f0', flut: (p) => 0.006 });
+  RM.add(g, { m: M(h.x, y, h.z, 0, o.ry || 0, 0.05), bone, color: '#f4f4f0', flut: 0.006 });
   for (const s of [-1, 1]) RM.add(tube([V3(h.x + s * 0.08, y + 0.07, h.z), V3(h.x + s * 0.02, h.y - 0.06, h.z), V3(h.x, h.y - 0.05, h.z)], 0.008, 4), { bone, color: '#f4f4f0' });
   RM.add(rbox(0.07, 0.09, 0.05, 0.005), { m: M(h.x + 0.03, y + 0.07, h.z), bone, color: '#7fb3d8' });
 }
@@ -176,4 +176,3 @@ export function glasses(D, P, color = '#6a5550') {
   D.add(tube([V3(-0.17 * R, ey + 0.004, ez + 0.004), V3(0, ey + 0.008, ez + 0.012), V3(0.17 * R, ey + 0.004, ez + 0.004)], 0.002, 4), { bone: 'head', color });
 }
 
-export { cyl };

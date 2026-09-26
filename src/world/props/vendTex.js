@@ -11,6 +11,7 @@
  *   ctrl           right-hand control strip: coin / bill slots, IC reader,
  *                  おつり lever labels, tiny LED readout
  */
+import { mural } from './signTex.js';
 import { Atlas, roundRect, fitText, verticalText, FONTS, seeded, grime, blotches, blossom, text, font } from './atlas.js';
 
 /** Per-machine look (keys match SPOTS.vending ids). */
@@ -436,6 +437,8 @@ export function makeVendAtlas() {
   A.region('ctrl', 128, 384, controlStrip);
   ids.forEach((id, i) => A.region(`low_${id}`, 480, 288, (g, w, h) => lowerPanel(g, w, h, MACHINES[id], 60 + i)));
   ids.forEach((id) => A.region(`head_${id}`, 480, 120, (g, w, h) => header(g, w, h, MACHINES[id])));
+  // spare space on the last shelf: the toilet-wall mural (the sign atlas is full)
+  A.region('mural', 448, 160, mural);
   const texture = A.finish();
   return { texture, r: (n) => A.r(n) };
 }

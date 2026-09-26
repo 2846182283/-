@@ -99,7 +99,8 @@ function interior(kit, sp) {
 
 /** Lights, plates, bumpers, mirrors, handles. */
 function trims(kit, sp) {
-  const L2 = sp.L / 2;
+  // the body extrusion's bevel pushes the nose / tail out by `bevel`: keep trims proud of it
+  const L2 = sp.L / 2 + (sp.bevel ?? 0.035);
   const S = kit.S;
   // bumpers
   kit.rbox(sp.W + 0.02, 0.16, 0.14, 0.05, 0, sp.bumperY, L2 - 0.03, sp.chrome ? 'metal' : 'vc', sp.chrome ? '#dfe3e8' : sp.bumper || '#c9ccd0');
@@ -178,7 +179,7 @@ const SPECS = {
     roofZ: [-0.8, 0.58], sill: [-1.4, 1.2],
     seatZ: [0.3, -0.75], dashY: 0.88, dashZ: 0.95,
     bumperY: 0.46, rearPlateY: 0.72, grille: [0.9, 0.16, 0.7], lampW: 0.34, lampH: 0.12, lampY: 0.7, lampZ: -0.04, tailY: 0.72, tailH: 0.16,
-    hoodY: 0.86, fenderMirror: true, handles: [0.35, -0.55], seams: [1.1, -0.1, -1.3], taxi: true,
+    hoodY: 0.86, fenderMirror: true, handles: [0.35, -0.55], seams: [1.1, -0.1, -1.3], taxi: true, bevel: 0.055,
   }),
 };
 
@@ -187,10 +188,10 @@ export function vehicle(kit, kind) {
   const sp = SPECS[kind]();
   const arches = [{ z: sp.wheelBase / 2, r: sp.wheelR + 0.05 }, { z: -sp.wheelBase / 2, r: sp.wheelR + 0.05 }];
   // lower body (+ the van's panel sides) with a soft bevel
-  sideExtrude(kit, profileShape(sp.upper, arches, sp.bottomY), sp.W, 'vc', sp.body, 0.035);
+  sideExtrude(kit, profileShape(sp.upper, arches, sp.bottomY), sp.W, 'vc', sp.body, sp.bevel ?? 0.035);
   // greenhouse glass (narrower = tumblehome), interior, frame
   sideExtrude(kit, polyShape(sp.glass), sp.W - sp.tumble * 2, 'glassDark', '#ffffff');
-  if (sp.rearGlass) kit.plane(sp.W - 0.3, sp.rearGlass[1][1] - sp.rearGlass[0][1], 0, (sp.rearGlass[0][1] + sp.rearGlass[1][1]) / 2, sp.rearGlass[0][0] - 0.012, 'glassDark', '#ffffff', { ry: Math.PI });
+  if (sp.rearGlass) kit.plane(sp.W - 0.3, sp.rearGlass[1][1] - sp.rearGlass[0][1], 0, (sp.rearGlass[0][1] + sp.rearGlass[1][1]) / 2, sp.rearGlass[0][0] - 0.012 - (sp.bevel ?? 0.035), 'glassDark', '#ffffff', { ry: Math.PI });
   interior(kit, sp);
   greenhouseFrame(kit, sp);
   wheelSet(kit, sp);
@@ -237,7 +238,10 @@ function waitingSpot(spot) {
 
 export function buildVehicles(kit, clusterOf) {
   for (const spot of SPOTS.vehicles) {
-    const v = spot.kind === 'kei-car-waiting-at-crossing' ? waitingSpot(spot) : spot;
+    let v = spot;
+    if (spot.kind === 'kei-car-waiting-at-crossing') v = waitingSpot(spot);
+    // the taxi pulls up at the north kerb by the taxi stand: with left-hand traffic it must face east
+    else if (spot.kind === 'retro-taxi' && spot.z < ROADS.stationFront.z) v = { ...spot, rotY: Math.PI / 2 };
     kit.cluster(clusterOf(v));
     const sp = SPECS[v.kind] ? SPECS[v.kind]() : SPECS['kei-car']();
     const s = surfaceY(v.x, v.z, v.y);

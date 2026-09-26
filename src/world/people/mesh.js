@@ -26,6 +26,16 @@ const _n = new THREE.Vector3();
 const _c = new THREE.Color();
 const _nm = new THREE.Matrix3();
 
+/**
+ * Smoothstep ss(x, a, b) that also works with reversed edges (a > b falls
+ * 1 -> 0 as x rises past a toward b).  THREE.MathUtils.smoothstep(x, min, max)
+ * returns 0 for any x <= min, which silently breaks reversed-edge skin weights.
+ */
+export function ss(x, a, b) {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
+
 /** UV used for untextured parts (a pure white texel block in the atlas). */
 export const WHITE_UV = [0.0305, 0.9695];
 

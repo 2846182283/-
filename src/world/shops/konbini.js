@@ -87,10 +87,10 @@ function glassFront(S, F, Z, band0) {
     const a = posts[i], b = posts[i + 1];
     if (a === -1.1) continue; // door bay handled by doors()
     B.box('solid', a, F, zf - 0.05, b, F + 0.22, zf + 0.05, '#b9bcc0');
-    B.quad('glass', (a + b) / 2, (F + 0.22 + F + 2.3) / 2, zf, b - a - 0.1, 2.08, '#fff');
+    B.quad('glassClear', (a + b) / 2, (F + 0.22 + F + 2.3) / 2, zf, b - a - 0.1, 2.08, '#fff');
   }
   // transom glass (full width) + automatic-door sticker over the door
-  B.quad('glass', 0, (F + 2.36 + top - 0.08) / 2, zf, W - 0.6, top - 0.08 - F - 2.36, '#fff');
+  B.quad('glassClear', 0, (F + 2.36 + top - 0.08) / 2, zf, W - 0.6, top - 0.08 - F - 2.36, '#fff');
   poster(S, 0, F + 2.2, zf + 0.02, 0.9, 0.22, A.sub('kDoor', 0, 0, 0.47, 1));
   poster(S, 0.0, F + 2.55, zf + 0.004, 1.0, 0.25, A.sub('kDoor', 0.51, 0, 0.49, 1));
   // posters on the glass (the classic konbini window collage)
@@ -110,7 +110,7 @@ function doors(S, F, Z) {
   const zf = Z - 0.12;
   const group = new THREE.Group();
   group.name = 'konbini-doors';
-  const kinds = { solid: { uv: 'atlas' }, glass: { uv: 'atlas' } };
+  const kinds = { solid: { uv: 'atlas' }, glassClear: { uv: 'atlas' } };
   const leaves = [];
   for (const side of [-1, 1]) {
     const LB = new Batcher(kinds, S.A.whiteUV);
@@ -122,7 +122,7 @@ function doors(S, F, Z) {
     LB.box('solid', -w / 2, h - bar, -0.025, w / 2, h, 0.025, C.alu);
     LB.box('solid', -w / 2, bar, -0.025, -w / 2 + bar, h - bar, 0.025, C.alu);
     LB.box('solid', w / 2 - bar, bar, -0.025, w / 2, h - bar, 0.025, C.alu);
-    LB.quad('glass', 0, h / 2, 0, w - bar * 2, h - bar * 2, '#fff');
+    LB.quad('glassClear', 0, h / 2, 0, w - bar * 2, h - bar * 2, '#fff');
     const leaf = new THREE.Group();
     for (const m of LB.finish(S.mats)) { m.matrixAutoUpdate = true; leaf.add(m); }
     leaf.position.set(side * w / 2, F, zf - 0.07);
@@ -147,7 +147,7 @@ function doors(S, F, Z) {
 function interior(S, F, Z) {
   const { B, A, W, D } = S;
   const zb = -D / 2 + 0.2, zf = Z - 0.2, ceil = F + 2.95;
-  room(S, -W / 2 + 0.25, W / 2 - 0.25, zb, zf, F, ceil, { floor: '#d6d6d0', wall: '#e2e2de', back: '#dcdcd8', ceil: '#e6e6e2', skirt: '#b0b0aa' });
+  room(S, -W / 2 + 0.25, W / 2 - 0.25, zb, zf, F, ceil, { floor: '#d6d6d0', wall: '#e2e2de', back: '#dcdcd8', ceil: '#f0f0ec', skirt: '#b0b0aa' });
   // fridges along the back wall (glowing doors)
   B.box('inner', -7.2, F, zb, 3.0, F + 2.2, zb + 0.75, '#e2e6ea');
   for (let i = 0; i < 4; i++) B.quad('lit', -6.0 + i * 2.55, F + 1.05, zb + 0.76, 2.5, 1.95, '#ffffff', A.get('kFridge'));

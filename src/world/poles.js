@@ -11,14 +11,16 @@
  *
  * Planning (this file): per-pole equipment choices (deterministic from the
  * pole id), the wire network (line spans, junction links into the
- * station-front line, cross-street spans, the high span over the railway),
- * service drops to lot fronts, guy wires at line ends, and perches.
+ * station-front line, a telecom span across the station-front junction,
+ * cross-street spans, the high span over the railway), service drops to lot
+ * fronts, guy wires at line ends, and sparrow perches chosen by projecting
+ * wire points into the layout's key cameras (hero / street / crossing).
  */
 import * as THREE from 'three';
 import { createKit, updateWireWidth } from './poles/kit.js';
 import { makePoleAtlas } from './poles/textures.js';
 import { buildPole } from './poles/pole.js';
-import { buildWires } from './poles/wires.js';
+import { buildWires, spanPoint } from './poles/wires.js';
 import { buildSigns, buildMirrors } from './poles/signs.js';
 import { buildSparrows } from './poles/sparrows.js';
 
@@ -113,6 +115,8 @@ export function planNetwork(ctx, byId) {
   // junction links: main street lines tie into the station-front line, crossing line into both roads
   link('PSF5', 'PMW0', 'full');
   link('PME0', 'PSF6', 'full');
+  // telecom cables cross the junction in front of the station (in the hero frame's sky)
+  link('PMW0', 'PSF6', 'tel');
   link('PSF6', 'PCR0', 'full');
   link('PNR6', 'PCR2', 'full');
   link('PCR2', 'PNR7', 'full');
@@ -132,7 +136,7 @@ export function planGuys(ctx, plans, links, byId) {
   const deg = new Map();
   const nb = new Map();
   for (const l of links) {
-    if (l.kind === 'cross') continue;
+    if (l.kind === 'cross' || l.kind === 'tel') continue;
     for (const [x, y] of [[l.a, l.b], [l.b, l.a]]) { deg.set(x, (deg.get(x) || 0) + 1); nb.set(x, y); }
   }
   const obstacles = [
@@ -181,37 +185,61 @@ export function planDrops(ctx, plans, attach) {
   return drops;
 }
 
-/** Choose sparrow perches on spans near the hero view, the station-front junction and the crossing. */
+/**
+ * Choose sparrow perches.  Candidate points along the low wires (telecom /
+ * low-voltage / drops) are projected into the layout's key cameras; each
+ * group takes rows of 1-4 birds on spans that are inside that frame, in its
+ * upper part (seen against the sky) and close enough to read.
+ */
+const PERCH_GROUPS = [
+  { cam: 'hero', n: 10, dist: [6, 34], yMin: -0.15 },
+  { cam: 'street', n: 9, dist: [8, 30], yMin: 0.05 },
+  { cam: 'crossing', n: 4, dist: [6, 40], yMin: -0.1 },
+];
+
 export function planPerches(ctx, spans) {
+  const L = ctx.layout;
   const rng = ctx.rng(4242);
-  const groups = [
-    { n: 12, test: (m) => m.z > 50 && m.z < 78 && Math.abs(m.x) < 9 && m.y > 5 && m.y < 8.8 }, // inside the hero frame
-    { n: 7, test: (m) => m.z > 8 && m.z < 30 && m.x > -24 && m.x < 30 && m.y > 5 },
-    { n: 4, test: (m) => m.x > 25 && m.x < 40 && m.z > -14 && m.z < 12 && m.y > 5 },
-  ];
+  const cam = new THREE.PerspectiveCamera(45, 16 / 9, 0.1, 500);
+  const p = new THREE.Vector3();
   const perches = [];
-  const mid = new THREE.Vector3();
-  for (const g of groups) {
-    const cand = spans.filter((s) => {
-      if (s.kind === 'hv' || s.L < 6) return false;
-      mid.lerpVectors(s.a, s.b, 0.5);
-      return g.test(mid);
-    });
+  const used = new Set();
+  for (const g of PERCH_GROUPS) {
+    const C = L.CAMERAS[g.cam];
+    if (!C) continue;
+    cam.fov = C.fov;
+    cam.position.set(...C.pos);
+    cam.lookAt(...C.look);
+    cam.updateMatrixWorld();
+    cam.updateProjectionMatrix();
+    // candidate (span, t) pairs visible in this camera
+    const cand = [];
+    for (const s of spans) {
+      if (s.kind === 'hv' || s.L < 5 || used.has(s)) continue;
+      for (let t = 0.15; t <= 0.85; t += 0.05) {
+        spanPoint(s.a, s.b, s.sag, t, p);
+        const d = p.distanceTo(cam.position);
+        if (d < g.dist[0] || d > g.dist[1]) continue;
+        p.project(cam);
+        if (p.z < 1 && Math.abs(p.x) < 0.9 && p.y > g.yMin && p.y < 0.92) cand.push({ s, t });
+      }
+    }
     if (!cand.length) continue;
     let left = g.n;
-    while (left > 0) {
-      const s = cand[Math.floor(rng() * cand.length)];
+    for (let guard = 0; left > 0 && guard < 50; guard++) {
+      const c = cand[Math.floor(rng() * cand.length)];
+      if (used.has(c.s)) continue;
+      used.add(c.s);
       const k = Math.min(left, 1 + Math.floor(rng() * 4)); // little rows of 1-4 birds
-      const t0 = 0.2 + rng() * 0.5;
       const facing = rng() < 0.5 ? 1 : -1;
       for (let i = 0; i < k; i++) {
-        perches.push({ span: s, t: t0 + (i * (0.16 + rng() * 0.12)) / s.L, facing: rng() < 0.8 ? facing : -facing, flier: rng() < 0.12 });
+        perches.push({ span: c.s, t: c.t + (i * (0.16 + rng() * 0.12)) / c.s.L, facing: rng() < 0.8 ? facing : -facing, flier: rng() < 0.12 });
       }
       left -= k;
     }
   }
   // make sure at least two birds fly now and then
-  let fl = perches.filter((p) => p.flier).length;
+  let fl = perches.filter((q) => q.flier).length;
   for (let i = 0; fl < 2 && i < perches.length; i += 5) if (!perches[i].flier) { perches[i].flier = true; fl++; }
   return perches;
 }

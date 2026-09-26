@@ -263,7 +263,7 @@ function phoneBooth(kit) {
     kit.box(W - 0.1, 0.22, 0.03, 0, 0.08, 0, 'vc', frame, { bottom: true });
     kit.box(W - 0.1, 0.04, 0.035, 0, 0.9, 0, 'metal', alu);
     kit.box(W - 0.1, 0.04, 0.035, 0, H - 0.18, 0, 'metal', alu);
-    kit.plane(W - 0.1, H - 0.52, 0, 0.3 + (H - 0.52) / 2, 0, 'glass', '#ffffff', { ry: 0 });
+    kit.plane(W - 0.1, H - 0.52, 0, 0.3 + (H - 0.52) / 2, 0, 'glassTint', '#ffffff', { ry: 0 });
     kit.pop();
   }
   // roof box with lit 公衆電話 signs on four sides
@@ -505,6 +505,12 @@ function toilet(kit) {
       for (let k = 0; k < 4; k++) kit.box(0.05, 0.03, 0.74, sx * (W / 2 + 0.01), 1.92 + k * 0.08, -0.5 + i * 1.0, 'vc', '#c9ccd0', { no: true, cast: false });
     }
   }
+  // back wall (faces the crossing road): a children's mural in a thin frame + a downpipe
+  const bz = -D / 2 - 0.05;
+  kit.box(3.3, 1.22, 0.03, 0, 1.28, bz - 0.005, 'vc', '#e2ded4', { cast: false });
+  kit.plane(3.2, 1.14, 0, 1.28, bz - 0.022, 'texV', '#ffffff', { region: kit.V('mural'), ry: Math.PI });
+  kit.cyl(0.045, 0.045, H - 0.02, -W / 2 + 0.12, 0.02, bz - 0.06, 'metal', '#b9bec4', { seg: 8 });
+  kit.box(0.12, 0.08, 0.12, -W / 2 + 0.12, H - 0.08, bz - 0.04, 'metal', '#b9bec4');
   kit.cyl(0.06, 0.06, 0.5, 1.4, H + 0.26, -0.8, 'metal', '#9aa1a8', { seg: 8 });
   kit.cyl(0.1, 0.1, 0.06, 1.4, H + 0.76, -0.8, 'metal', '#9aa1a8', { seg: 8 });
   // outdoor hand-wash basin by the accessible door

@@ -7,7 +7,7 @@
  */
 import * as THREE from 'three';
 import { shopHouse, room, hisashi } from './shell.js';
-import { slidingDoors, noren, lantern, pendant, poster, crate, projectingSign, aFrame } from './parts.js';
+import { slidingDoors, noren, lantern, pendant, poster, crate, projectingSign, aFrame, hangingPlate } from './parts.js';
 
 const WOODR = '#5a3a2e';
 
@@ -37,10 +37,11 @@ export function buildRamen(S) {
   slidingDoors(S, -1.89, 0.29, F, F + 2.22, zf, { panels: 2, frame: WOODR, kick: 0.5, kickKind: 'wood', kickColor: '#6a4234', bars: 2, open: 0.25 });
   B.box('solid', -1.95, S.gy(-0.8, Z + 0.3) - 0.08, Z, 0.35, F - 0.005, Z + 0.3, '#b8b2a8');
   poster(S, -0.2, F + 1.35, zf + 0.012, 0.26, 0.32, A.get('hours'));
+  hangingPlate(S, -1.35, F + 1.12, zf + 0.03, 0.34, 0.25, A.get('shopcard'));
   // food sample window: lit shelf with bowls, gyoza plates, price cards
   const sx0 = 0.41, sx1 = 3.04;
   B.box('wood', sx0, F, zf - 0.02, sx1, F + 0.8, zf + 0.02, '#6a4234');
-  B.box('inner', sx0, F + 0.8, zf - 0.55, sx1, F + 1.9, zf - 0.05, '#f4efe4', { skip: 'Z' });
+  B.box('inner', sx0, F + 0.8, zf - 0.55, sx1, F + 1.9, zf - 0.05, '#e6d4b4', { skip: 'Z', colors: { y: '#f4ead8' } });
   B.box('solid', sx0, F + 0.78, zf - 0.55, sx1, F + 0.82, zf + 0.12, '#c9ccd0');
   B.quad('lit', (sx0 + sx1) / 2, F + 1.88, zf - 0.3, sx1 - sx0 - 0.1, 0.4, '#fff6e0', null, { rx: Math.PI / 2 });
   sampleShelf(S, sx0, sx1, F + 0.82, zf - 0.3);
@@ -96,10 +97,35 @@ function sampleShelf(S, x0, x1, y, z) {
     B.cyl('inner', bx, y + 0.18, z, 0.04, 0.02, '#8ac06a', { seg: 6 }); // negi
     B.quad('inner', bx, y + 0.06, z + 0.16, 0.18, 0.08, '#ffffff', A.sub('rMenu', i / 6, 0.75, 1 / 6, 0.2), { rx: -0.3 });
   }
-  // gyoza plate at the back
-  B.cyl('inner', (x0 + x1) / 2, y + 0.3, z - 0.18, 0.14, 0.02, '#f4efe4', { seg: 12 });
-  for (let k = 0; k < 5; k++) B.sphere('inner', (x0 + x1) / 2 - 0.08 + k * 0.04, y + 0.33, z - 0.18, 0.03, '#e0b070', { sx: 0.7, sy: 0.5, sz: 1.4, w: 6, h: 4 });
+  // raised back step + upper glass tier: fried rice, gyoza, beer, a set tray
   B.box('inner', x0 + 0.1, y, z - 0.25, x1 - 0.1, y + 0.3, z - 0.2, '#e8e0d0');
+  const y2 = y + 0.5, z2 = z - 0.1;
+  B.box('glass', x0 + 0.08, y2 - 0.012, z2 - 0.16, x1 - 0.08, y2, z2 + 0.14, '#fff');
+  for (const px of [x0 + 0.1, x1 - 0.1]) B.box('inner', px - 0.012, y, z2 - 0.14, px + 0.012, y2, z2 - 0.12, '#c9ccd0');
+  const step = (x1 - x0 - 0.5) / 3;
+  // チャーハン: golden dome on a plate
+  let px = x0 + 0.25;
+  B.cyl('inner', px, y2, z2, 0.13, 0.015, '#f4efe4', { seg: 12 });
+  B.sphere('inner', px, y2 + 0.015, z2, 0.11, '#e8b858', { half: true, w: 12, h: 4, sy: 0.75 });
+  B.sphere('inner', px + 0.03, y2 + 0.07, z2 + 0.02, 0.018, '#e86a5a', { ico: 0 });
+  // 餃子: six dumplings on an oval plate
+  px += step;
+  B.cyl('inner', px, y2, z2, 0.14, 0.015, '#f4efe4', { seg: 12, sz: 0.7 });
+  for (let k = 0; k < 6; k++) B.sphere('inner', px - 0.09 + k * 0.036, y2 + 0.025, z2, 0.026, k % 2 ? '#d8a058' : '#e8c080', { sx: 0.6, sy: 0.6, sz: 1.5, w: 6, h: 4 });
+  // ビール: mug with foam
+  px += step;
+  B.cyl('inner', px, y2, z2, 0.045, 0.14, '#e8a840', { seg: 10 });
+  B.cyl('inner', px, y2 + 0.14, z2, 0.048, 0.035, '#fbf8f0', { seg: 10 });
+  B.tube('inner', [[px + 0.045, y2 + 0.11, z2], [px + 0.08, y2 + 0.09, z2], [px + 0.08, y2 + 0.04, z2], [px + 0.045, y2 + 0.03, z2]], 0.008, '#e8e0cc', { radial: 4 });
+  // 定食 tray: bowl of rice + small dishes
+  px += step;
+  B.box('inner', px - 0.14, y2, z2 - 0.1, px + 0.14, y2 + 0.015, z2 + 0.1, '#6a3a2a');
+  B.sphere('inner', px - 0.06, y2 + 0.05, z2 - 0.03, 0.05, '#2a2a2e', { half: true, rx: Math.PI, w: 8, h: 3 });
+  B.sphere('inner', px - 0.06, y2 + 0.05, z2 - 0.03, 0.045, '#fbf8f0', { half: true, w: 8, h: 3, sy: 0.5 });
+  B.cyl('inner', px + 0.06, y2 + 0.015, z2 + 0.03, 0.04, 0.02, '#f4efe4', { seg: 8 });
+  B.cyl('inner', px + 0.06, y2 + 0.035, z2 + 0.03, 0.03, 0.01, '#8ac06a', { seg: 8 });
+  // price strips clipped to the glass shelf edge
+  for (let i = 0; i < 4; i++) B.quad('inner', x0 + 0.25 + i * step, y2 - 0.04, z2 + 0.145, 0.14, 0.06, '#ffffff', A.sub('rMenu', ((i + 4) % 6) / 6, 0.75, 1 / 6, 0.2));
 }
 
 function interior(S, F, Z) {

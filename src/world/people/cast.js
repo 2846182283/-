@@ -20,6 +20,7 @@ import * as THREE from 'three';
 import { buildCharacter, fitBounds } from './character.js';
 import { recipes } from './recipes.js';
 import { vnoise } from './rig.js';
+import { ss } from './mesh.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -28,7 +29,6 @@ const _t = new THREE.Vector3();
 const _t2 = new THREE.Vector3();
 const _pole = new THREE.Vector3();
 const _q = new THREE.Quaternion();
-const _axis = new THREE.Vector3();
 const _look = { yaw: 0, pitch: 0 };
 
 /** A placed character with helpers for world <-> local work. */
@@ -90,7 +90,7 @@ function breathe(a, t, seed, extraX = 0, extraY = 0, extraZ = 0) {
 export function buildCast(ctx, shared) {
   const { layout, sim } = ctx;
   const { SPOTS, PLATFORM, STATION, PLAZA, MAIN_STREET, LOTS, surfaceY } = layout;
-  const R = recipes(shared.rects);
+  const R = recipes();
   const group = new THREE.Group();
   group.name = 'cast';
   const actors = [];
@@ -146,16 +146,30 @@ export function buildCast(ctx, shared) {
   // ---- 2. crossing girl with her bike ------------------------------------------
   {
     const s = SPOTS.people.crossingGirlWithBike;
-    const y = surfaceY(s.x, s.z) + 0.005;
+    // she stands a little west of the hint spot (the crossing control cabinet
+    // occupies x > 36.35) and turns toward her bike, which faces the tracks
+    const gx = s.x - 0.35, gz = s.z;
+    const turn = -0.45;
+    const rotY = s.rotY + turn;
+    const y = surfaceY(gx, gz) + 0.005;
+    // bike frame in her model space: 0.45 m to her right (-X), 0.2 m ahead, yaw back to world-north
+    const bikeWorld = V(gx, 0, gz).addScaledVector(V(Math.cos(s.rotY), 0, -Math.sin(s.rotY)), -0.45).addScaledVector(V(Math.sin(s.rotY), 0, Math.cos(s.rotY)), 0.2);
+    const cr = Math.cos(rotY), sr = Math.sin(rotY);
+    const dx = bikeWorld.x - gx, dz = bikeWorld.z - gz;
+    const bikeM = new THREE.Matrix4().makeRotationY(-turn).setPosition(dx * cr - dz * sr, 0, dx * sr + dz * cr);
+    const bike = {};
     const look = V(), grip = V();
     let yawS = 0;
-    add(R.crossingGirl, s.x, y, s.z, s.rotY, (a) => {
-      a.p.set('hips', 0, 0, 0.04).set('spine', 0, -0.08, -0.02).set('chest', 0, -0.06, -0.02);
+    add(R.crossingGirl(bikeM, bike), gx, y, gz, rotY, (a) => {
+      a.p.set('hips', 0, 0, 0.03).set('spine', 0.04, -0.05, 0).set('chest', 0.03, -0.05, 0);
+      a.p.set('thigh_L', -0.06, 0, 0.02).set('shin_L', 0.12, 0, 0).set('foot_L', -0.06, 0.15, 0);
       a.p.updateWorld();
-      a.w(-0.24, 1.0, 0.25, grip);
-      a.arm('R', grip, -1, -0.4, -0.6);
-      a.p.set('upperArm_L', 0.05, 0, -0.06).set('foreArm_L', -0.25, 0, 0);
-      a.p.set('thigh_L', -0.05, 0, 0.02).set('shin_L', 0.1, 0, 0).set('foot_L', -0.05, 0.2, 0);
+      // left hand on the bike's left grip, right hand resting on the saddle
+      const gl = bike.grips[0], sd = bike.saddle;
+      a.w(gl.x, gl.y + 0.035, gl.z - 0.01, grip);
+      a.arm('L', grip, 0.6, -0.8, -0.4, 0.4);
+      a.w(sd.x, sd.y + 0.045, sd.z, grip);
+      a.arm('R', grip, -0.8, -0.6, -0.2, -0.3);
     }, (a, t, dt) => {
       breathe(a, t, 2);
       ponytail(a, t);
@@ -172,14 +186,15 @@ export function buildCast(ctx, shared) {
       yawS += (target - yawS) * Math.min(1, dt * 2.5);
       a.p.delta('head', 0.02 + vnoise(t * 0.3, 5) * 0.04, yawS, 0.05);
       a.p.delta('neck', 0, yawS * 0.3, 0);
-    }, 0.45);
+    }, 0);
+    ctx.addCollider(Math.min(gx, bikeWorld.x) - 0.35, Math.max(gx, bikeWorld.x) + 0.3, gz - 1.0, gz + 0.8);
   }
 
   // ---- 3. vending boy ----------------------------------------------------------------
   {
     const s = SPOTS.people.vendingBoy;
     const vm = SPOTS.vending.find((v) => v.id === 'V1');
-    const z = vm ? vm.z + 1.1 : s.z;
+    const z = vm ? vm.z + 0.36 + 0.5 : s.z; // cabinet front face is 0.36 m in front of the spot (props/vending.js)
     const tgt = V();
     add(R.vendingBoy, s.x + 0.05, surfaceY(s.x, z), z, s.rotY, (a) => {
       a.p.set('spine', 0.06, 0, 0).set('chest', 0.04, 0.05, 0);
@@ -212,7 +227,8 @@ export function buildCast(ctx, shared) {
       a.o.updateMatrixWorld(true);
       a.p.set('spine', 0.12, 0, 0).set('chest', 0.1, 0, 0).set('neck', 0.12, 0, 0).set('head', 0.3, 0.05, 0.04);
       for (const [sd, sx] of [['L', 1], ['R', -1]]) {
-        a.w(sx * 0.1, PLATFORM.top + P.ankleY, P.hipJ - P.kneeY + 0.07, _t);
+        // feet flat on the platform, shins roughly vertical below the knees (local coords)
+        a.w(sx * 0.1, PLATFORM.top - a.o.position.y + P.ankleY, P.hipJ - P.kneeY + 0.07, _t);
         a.leg(sd, _t, 0, 0.4, 1);
         a.levelFoot(sd);
       }
@@ -222,7 +238,7 @@ export function buildCast(ctx, shared) {
       bk.getWorldPosition(book);
       for (const [sd, sx] of [['L', 1], ['R', -1]]) {
         a.w(a.rest.book.x + sx * 0.1, a.rest.book.y - 0.07, a.rest.book.z - 0.07, hand);
-        a.arm(sd, hand, sx * 0.8, -0.6, -0.4, sx * 0.6);
+        a.arm(sd, hand, sx * 0.35, -1, -0.15, sx * 0.6); // elbows dropped toward the lap
       }
       // spine axis of the book in character space (book frame: rx -0.95 then ry PI)
       axis.set(0, 1, 0).applyEuler(new THREE.Euler(-0.95, Math.PI, 0, 'YXZ'));
@@ -238,64 +254,66 @@ export function buildCast(ctx, shared) {
   }
 
   // ---- 5. café clerk at the chalk A-frame ------------------------------------------------
+  // The A-frame (shops/cafe.js) stands at lot-local (3.45, D/2 + 0.85), yawed 0.45 in the
+  // lot frame, 1.0 m tall with its face leaning back 0.2 m at the foot.  The clerk stands
+  // on its door side, turned toward the face, writing today's menu with her right hand.
   {
     const cafe = LOTS.find((l) => l.type === 'cafe');
     if (cafe) {
-      const D = cafe.depth;
-      // A-frame (shops/cafe.js): lot-local (3.45, D/2 + 0.85), yaw 0.45 in the lot frame
-      const bl = { x: 3.45, z: D / 2 + 0.85 }, by = 0.45;
-      const fx = Math.sin(by), fz = Math.cos(by), rx = Math.cos(by), rz = -Math.sin(by);
-      const pl = { x: bl.x + fx * 0.62 - rx * 0.32, z: bl.z + fz * 0.62 - rz * 0.32 };
-      const pw = cafe.toWorld(pl.x, pl.z);
-      const bw = cafe.toWorld(bl.x + fx * 0.14, bl.z + fz * 0.14); // board face centre (world xz)
-      const rotY = Math.atan2(bw.x - pw.x, bw.z - pw.z) + 0.25;
-      const y = surfaceY(pw.x, pw.z);
-      const pen = V(), rightW = V(), frontW = V();
-      // board frame in world space (for the writing loop)
-      const rot = cafe.rotY + by;
-      rightW.set(Math.cos(rot), 0, -Math.sin(rot));
-      frontW.set(Math.sin(rot), 0, Math.cos(rot));
-      const board = cafe.toWorld(bl.x, bl.z);
+      const board = cafe.toWorld(3.45, cafe.depth / 2 + 0.85);
+      const rot = cafe.rotY + 0.45;
+      const frontW = V(Math.sin(rot), 0, Math.cos(rot)); // board face normal (horizontal)
+      const rightW = V(-frontW.z, 0, frontW.x).negate(); // viewer's right when facing the board
       const gy = surfaceY(board.x, board.z);
-      add(R.cafeClerk, pw.x, y, pw.z, rotY, (a) => {
-        a.p.set('spine', 0.16, 0, 0).set('chest', 0.1, -0.1, 0).set('hips', 0, 0, 0.03);
-        a.p.set('thigh_L', -0.12, 0, 0.03).set('shin_L', 0.2, 0, 0).set('foot_L', -0.08, 0, 0);
-        a.p.set('upperArm_L', 0.05, 0, -0.15).set('foreArm_L', -0.3, 0, 0);
+      const px = board.x + frontW.x * 0.4 - rightW.x * 0.38, pz = board.z + frontW.z * 0.4 - rightW.z * 0.38;
+      const aim = V(board.x + frontW.x * 0.12 - rightW.x * 0.06, 0, board.z + frontW.z * 0.12 - rightW.z * 0.06);
+      const rotY = Math.atan2(aim.x - px, aim.z - pz);
+      const pen = V(), rest = V();
+      /** Point on the (leaning) board face: h above the foot, `across` along the viewer's right. */
+      const onFace = (h, across, out) => out.set(board.x, gy + h, board.z)
+        .addScaledVector(rightW, across).addScaledVector(frontW, 0.2 * (1 - h) + 0.035);
+      add(R.cafeClerk, px, surfaceY(px, pz), pz, rotY, (a) => {
+        a.p.set('hips', 0.08, 0, 0.03).set('spine', 0.2, 0, 0).set('chest', 0.14, 0, 0);
+        a.p.set('thigh_L', -0.16, 0, 0.03).set('shin_L', 0.22, 0, 0).set('foot_L', -0.12, 0, 0);
+        a.p.set('thigh_R', -0.08, 0, 0).set('shin_R', 0.08, 0, 0);
+        // left hand steadies the board's top rail on her side
+        onFace(0.98, -0.2, rest);
+        a.arm('L', rest, 0.6, -0.8, -0.3);
       }, (a, t) => {
         breathe(a, t, 5);
-        // write in small loops across the board face (height ~0.55..0.8)
+        // chalk moves in short strokes along three menu lines (~0.68 .. 0.88 m up)
         const line = Math.floor(t / 4) % 3;
         const u = (t % 4) / 4;
-        const h = 0.78 - line * 0.1 + Math.sin(t * 9) * 0.012;
-        const across = -0.14 + u * 0.24 + Math.sin(t * 7.3) * 0.01;
-        const faceZ = 0.2 * (1 - h / 1.0) + 0.03;
-        pen.set(board.x, gy + h, board.z).addScaledVector(rightW, across).addScaledVector(frontW, faceZ + 0.05);
-        pen.y -= 0.03;
-        a.arm('R', pen, -1, -0.6, -0.2);
+        const h = 0.88 - line * 0.1 + Math.sin(t * 9) * 0.01;
+        const across = -0.16 + u * 0.26 + Math.sin(t * 7.3) * 0.008;
+        onFace(h, across, pen);
+        a.arm('R', pen, -1, -0.7, -0.2);
         const hh = a.headToward(pen, 0.9);
-        a.p.delta('head', hh.pitch * 0.7 + 0.05, hh.yaw * 0.7, 0.1);
+        a.p.delta('head', hh.pitch * 0.7 + 0.05, hh.yaw * 0.7, 0.08);
       });
     }
   }
 
   // ---- 6. old lady with shopping bags ------------------------------------------------------
+  // pauses on the east shoulder in front of the wagashi shop, eyeing today's sweets
   {
     const s = SPOTS.people.oldLadyWithBags;
     const y = surfaceY(s.x, s.z);
-    const tree = V(s.x - 2.5, y + 5.5, s.z - 4);
-    add(R.oldLady, s.x, y, s.z, -0.35, (a) => {
-      const P = a.P;
-      a.p.set('spine', 0.16, 0, 0).set('chest', 0.1, 0, 0).set('neck', -0.12, 0, 0);
+    const rotY = s.rotY + Math.PI - 0.35; // turned from the street toward the shop front (3/4 view from the south)
+    const look = V(s.x + Math.sin(rotY) * 1.6, y + 1.0, s.z + Math.cos(rotY) * 1.6);
+    add(R.oldLady, s.x, y, s.z, rotY, (a) => {
+      a.p.set('spine', 0.16, 0, 0).set('chest', 0.1, 0, 0).set('neck', -0.08, 0, 0);
+      a.p.set('thigh_R', -0.05, 0, 0).set('shin_R', 0.1, 0, 0).set('foot_R', -0.05, 0, 0);
+      // bags pull the arms nearly straight, elbows tucked back against the body
       for (const [sd, sx] of [['L', 1], ['R', -1]]) {
         const r = a.rest[`hand_${sd}`];
-        a.w(r.x + sx * 0.08, r.y + 0.07, r.z + 0.1, _t);
-        a.arm(sd, _t, sx, 0, -0.5);
+        a.w(r.x + sx * 0.02, r.y + 0.03, r.z + 0.06, _t);
+        a.arm(sd, _t, sx * 0.25, 0, -1);
       }
-      void P;
     }, (a, t) => {
       breathe(a, t, 6);
-      const h = a.headToward(tree, 0.7, 0.6);
-      a.p.delta('head', h.pitch - 0.1 + vnoise(t * 0.2, 7) * 0.05, h.yaw + vnoise(t * 0.1, 8) * 0.25, 0);
+      const h = a.headToward(look, 0.7, 0.8);
+      a.p.delta('head', h.pitch + vnoise(t * 0.2, 7) * 0.05, h.yaw + vnoise(t * 0.1, 8) * 0.2, 0.04);
     });
   }
 
@@ -391,22 +409,55 @@ export function buildCast(ctx, shared) {
 
   // ---- 12. walker on the main street (looping walk cycle) ------------------------------------------
   {
-    const s0 = MAIN_STREET.atZ(96).s, s1 = MAIN_STREET.atZ(18).s;
+    // strolls north from z ~70 to just short of the station-front junction, then loops
+    // (the respawn point is behind the hero camera, which looks north from z ~24)
+    const s0 = MAIN_STREET.atZ(70).s, s1 = MAIN_STREET.atZ(13).s;
+    const phase0 = s0 - MAIN_STREET.atZ(16.5).s; // t = 0: a few metres ahead of the hero camera
     const speed = 0.72;
     const len = s0 - s1;
-    const off = -2.55;
     const hand = V();
     let stride = 0;
+    // He keeps to the pedestrian strip outside the white edge line (west side, walking
+    // north = keep-left), stepping in toward the line around parked bikes, poles and signs.
+    const LANE = -3.35, DODGE = -2.5;
+    const obstacles = [];
+    const addObstacle = (x, z) => {
+      if (z < 8 || z > 75) return;
+      const f = MAIN_STREET.atZ(z);
+      const d = (x - f.x) * f.nx + (z - f.z) * f.nz;
+      if (d < -2.9 && d > -4.6) obstacles.push(f.s);
+    };
+    for (const b of SPOTS.bicycles) addObstacle(b.x, b.z);
+    for (const l of layout.POLE_LINES) for (const q of l.poles) addObstacle(q.x, q.z);
+    for (const q of SPOTS.signs) addObstacle(q.x, q.z);
+    const lateralAt = (sArc) => {
+      let w = 0;
+      for (const so of obstacles) w = Math.max(w, ss(Math.abs(sArc - so), 2.2, 1.0));
+      return LANE + (DODGE - LANE) * w;
+    };
     // path table (x, y, z, yaw every 0.25 m), sampled once so the update never allocates
     const STEP = 0.25;
     const nPath = Math.ceil(len / STEP) + 2;
     const path = new Float32Array(nPath * 4);
     for (let i = 0; i < nPath; i++) {
-      const p = MAIN_STREET.offsetAtS(s0 - Math.min(len, i * STEP), off);
+      const sArc = s0 - Math.min(len, i * STEP);
+      const p = MAIN_STREET.offsetAtS(sArc, lateralAt(sArc));
       path[i * 4] = p.x;
       path[i * 4 + 1] = surfaceY(p.x, p.z);
       path[i * 4 + 2] = p.z;
-      path[i * 4 + 3] = Math.atan2(-p.frame.tx, -p.frame.tz);
+    }
+    // heading from the path itself (so side-steps turn the body a little)
+    for (let i = 0; i < nPath; i++) {
+      const a = Math.max(0, i - 2) * 4, b = Math.min(nPath - 1, i + 2) * 4;
+      path[i * 4 + 3] = Math.atan2(path[b] - path[a], path[b + 2] - path[a + 2]);
+    }
+    // unwrap (heading is near +-PI when walking north) so interpolation never spins
+    for (let i = 1; i < nPath; i++) {
+      let h = path[i * 4 + 3];
+      const prev = path[(i - 1) * 4 + 3];
+      while (h - prev > Math.PI) h -= Math.PI * 2;
+      while (h - prev < -Math.PI) h += Math.PI * 2;
+      path[i * 4 + 3] = h;
     }
     add(R.walker, 0, 0, 60, 0, (a) => {
       a.p.set('spine', 0.12, 0, 0).set('chest', 0.05, 0, 0).set('neck', -0.05, 0, 0).set('head', -0.08, 0, 0);
@@ -417,7 +468,7 @@ export function buildCast(ctx, shared) {
       }
       stride = 0.5;
     }, (a, t) => {
-      const d = (t * speed + 34) % len; // phase: in front of the hero camera at t = 0
+      const d = (t * speed + phase0) % len;
       const fi = d / STEP, i = Math.min(nPath - 2, Math.floor(fi)), k = fi - i;
       const j = i * 4;
       const ph = (t * speed / stride) * Math.PI; // one step per stride length
@@ -484,4 +535,3 @@ export function buildCast(ctx, shared) {
   return { group, actors };
 }
 
-export { _axis };

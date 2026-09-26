@@ -11,9 +11,10 @@
  */
 import * as THREE from 'three';
 import { RigMesh, ellipsoid, strand, M, V3 } from './mesh.js';
-import { makeRig, Poser, vnoise } from './rig.js';
+import { makeRig, vnoise } from './rig.js';
 import { paintCatFace, FACE } from './atlas.js';
 import { finishRig, fitBounds } from './character.js';
+import { makeRegionProbe } from './probe.js';
 
 const CATS = {
   white: { fur: '#f4f1ec', shade: '#e3dcd6', eye: '#8fc0d8', nose: '#eaa0a8', line: '#6a5a5e', inner: '#f2c4c8' },
@@ -103,27 +104,17 @@ function buildCat(id, kind, pose, shared) {
   return ch;
 }
 
-/** Ray-cast straight down onto already-built scene geometry. */
-function makeProbe(ctx, exclude) {
-  const ray = new THREE.Raycaster();
-  ray.far = 4;
-  const down = V3(0, -1, 0);
-  const targets = ctx.scene.children.filter((o) => o !== exclude && o.name !== 'sky');
-  return (x, z, fromY) => {
-    ray.set(V3(x, fromY, z), down);
-    const hit = ray.intersectObjects(targets, true).find((h) => h.object.visible && !(h.object.material && h.object.material.transparent));
-    if (!hit) return null;
-    const n = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : V3(0, 1, 0);
-    return { y: hit.point.y, ny: n.y };
-  };
+/** Scene roots other modules built (everything but the sky and ourselves). */
+function perchRoots(ctx, exclude) {
+  return ctx.scene.children.filter((o) => o !== exclude && o.name !== 'sky' && !o.isLight && !o.isCamera);
 }
 
 export function buildCats(ctx, shared, cast) {
   const { layout } = ctx;
-  const { LOTS, SPOTS, MAIN_STREET, groundY } = layout;
+  const { LOTS, SPOTS, groundY } = layout;
   const group = new THREE.Group();
   group.name = 'cats';
-  const probe = makeProbe(ctx, cast);
+  const roots = perchRoots(ctx, cast);
   const cats = [];
 
   // ---- white cat on a garden wall along the main street ----------------------------
@@ -131,6 +122,16 @@ export function buildCats(ctx, shared, cast) {
     let best = null;
     const want = { z: 50, side: 1 };
     const lots = LOTS.filter((l) => l.street === 'main' && l.type === 'house' && l.z > 30 && l.z < 75);
+    // one triangle grid covering the fronts of the candidate lots
+    const reg = { x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity };
+    for (const lot of lots) {
+      for (const [lx, lz] of [[-0.5, 0.5], [0.5, 0.5], [-0.5, 0.5 + 2.2 / lot.depth], [0.5, 0.5 + 2.2 / lot.depth]]) {
+        const w = lot.toWorld(lx * lot.width, lz * lot.depth);
+        reg.x0 = Math.min(reg.x0, w.x - 0.5); reg.x1 = Math.max(reg.x1, w.x + 0.5);
+        reg.z0 = Math.min(reg.z0, w.z - 0.5); reg.z1 = Math.max(reg.z1, w.z + 0.5);
+      }
+    }
+    const probe = makeRegionProbe(roots, reg, 0.4);
     for (const lot of lots) {
       const edge = lot.depth / 2 + (lot.setback || 0.8);
       for (let lx = -lot.width / 2 + 0.4; lx <= lot.width / 2 - 0.4; lx += 0.35) {
@@ -164,32 +165,62 @@ export function buildCats(ctx, shared, cast) {
   // ---- calico + black cat by the shrine -----------------------------------------------
   {
     const sh = SPOTS.shrine;
+    const probe = makeRegionProbe(roots, { x0: sh.x - 3.5, x1: sh.x + 3.5, z0: sh.z - 3, z1: sh.z + 3.5 }, 0.25);
+    // A loafing cat needs ~0.14 m across and ~0.34 m along its body: test both axes of the
+    // shrine frame, so the narrow ledges of the two-tier stone base qualify.  Prefer the
+    // right-hand side ledge, facing the visitors (+Z of the shrine).
+    const cs = Math.cos(sh.rotY), sn = Math.sin(sh.rotY);
+    const toW = (lx, lz) => ({ x: sh.x + lx * cs + lz * sn, z: sh.z - lx * sn + lz * cs });
     let perch = null;
-    for (let dx = -2.2; dx <= 2.2; dx += 0.1) {
-      for (let dz = -1.6; dz <= 1.8; dz += 0.1) {
-        const x = sh.x + dx, z = sh.z + dz;
-        const h = probe(x, z, 3.5);
+    for (let lx = -2.2; lx <= 2.2; lx += 0.05) {
+      for (let lz = -1.6; lz <= 1.8; lz += 0.05) {
+        const w = toW(lx, lz);
+        const h = probe(w.x, w.z, 3.5);
         if (!h || h.ny < 0.97) continue;
-        const hh = h.y - groundY(x, z);
-        if (hh < 0.3 || hh > 0.9) continue;
-        let ok = true;
-        for (const [ox, oz] of [[0.1, 0], [-0.1, 0], [0, 0.18], [0, -0.18]]) {
-          const q = probe(x + ox, z + oz, 3.5);
-          if (!q || Math.abs(q.y - h.y) > 0.015) { ok = false; break; }
+        const hh = h.y - groundY(w.x, w.z);
+        if (hh < 0.25 || hh > 0.9) continue;
+        for (const along of [0, 1]) { // 0: body along shrine Z, 1: along shrine X
+          let ok = true;
+          for (const [a, c] of [[0.07, 0], [-0.07, 0], [0, 0.17], [0, -0.17], [0.05, 0.12], [-0.05, -0.12]]) {
+            const q = along ? toW(lx + c, lz + a) : toW(lx + a, lz + c);
+            const r = probe(q.x, q.z, 3.5);
+            if (!r || Math.abs(r.y - h.y) > 0.015) { ok = false; break; }
+          }
+          if (!ok) continue;
+          const score = Math.hypot(lx - 0.72, lz + 0.45) + along * 0.3;
+          if (!perch || score < perch.score) {
+            // face away from the shrine body: +Z (front) along a side ledge, outward along a front/back one
+            const yaw = along ? (lx >= 0 ? Math.PI / 2 : -Math.PI / 2) : (lz < -0.7 ? Math.PI : 0);
+            perch = { x: w.x, y: h.y, z: w.z, rotY: sh.rotY + yaw, score };
+          }
         }
-        if (!ok) continue;
-        const score = Math.hypot(dx - 1.2, dz - 0.6);
-        if (!perch || score < perch.score) perch = { x, y: h.y, z, score };
       }
     }
-    if (!perch) perch = { x: sh.x + 1.3, y: groundY(sh.x + 1.3, sh.z + 0.6), z: sh.z + 0.6 };
-    cats.push({ ch: buildCat('calico', 'calico', 'loaf', shared), ...perch, rotY: sh.rotY + 0.9, seed: 2 });
-    const bx = perch.x + 0.9, bz = perch.z + 0.9;
-    const g = probe(bx, bz, 3.5);
-    const by = g && g.y - groundY(bx, bz) < 0.2 ? g.y : groundY(bx, bz) + 0.02;
-    cats.push({ ch: buildCat('black', 'black', 'sit', shared), x: bx, y: by, z: bz, rotY: Math.atan2(perch.x - bx, perch.z - bz) + 0.3, seed: 3 });
+    if (!perch) perch = { x: sh.x + 1.3, y: groundY(sh.x + 1.3, sh.z + 0.6), z: sh.z + 0.6, rotY: sh.rotY + 0.9 };
+    cats.push({ ch: buildCat('calico', 'calico', 'loaf', shared), ...perch, seed: 2 });
+    // black cat: sits on the (low, flat) gravel a short way off, watching the calico.
+    // Try a ring of spots and keep the first that is flat and free of statues / lanterns.
+    let spot = null;
+    for (let k = 0; k < 16 && !spot; k++) {
+      const ang = 0.8 + k * 0.785, rad = 0.9 + (k >> 3) * 0.35;
+      const bx = perch.x + Math.cos(ang) * rad, bz = perch.z + Math.sin(ang) * rad;
+      const g0 = groundY(bx, bz);
+      const c = probe(bx, bz, 3.5);
+      if (!c || c.y - g0 > 0.1) continue;
+      let flat = true;
+      for (const [ox, oz] of [[0.15, 0], [-0.15, 0], [0, 0.18], [0, -0.18]]) {
+        const q = probe(bx + ox, bz + oz, 3.5);
+        if (!q || Math.abs(q.y - c.y) > 0.03) { flat = false; break; }
+      }
+      if (flat) spot = { x: bx, y: c.y, z: bz };
+    }
+    if (!spot) spot = { x: perch.x + 0.9, y: groundY(perch.x + 0.9, perch.z + 0.9) + 0.02, z: perch.z + 0.9 };
+    cats.push({ ch: buildCat('black', 'black', 'sit', shared), ...spot, rotY: Math.atan2(perch.x - spot.x, perch.z - spot.z) + 0.3, seed: 3 });
   }
 
+  if (ctx.params?.get('peopleDebug')) {
+    for (const c of cats) console.warn(`[people] cat ${c.ch.object.name} at ${c.x.toFixed(2)},${c.y.toFixed(2)},${c.z.toFixed(2)}`);
+  }
   for (const c of cats) {
     c.ch.object.position.set(c.x, c.y, c.z);
     c.ch.object.rotation.y = c.rotY;

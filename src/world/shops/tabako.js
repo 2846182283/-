@@ -60,7 +60,7 @@ export function buildTabako(S) {
     B.box('solid', px - w / 2, F + 0.45, zz - 0.02, px - w / 2 + 0.05, F + 2.0, zz + 0.02, '#7a5a40');
     B.box('solid', px + w / 2 - 0.05, F + 0.45, zz - 0.02, px + w / 2, F + 2.0, zz + 0.02, '#7a5a40');
     for (let k = 1; k < 4; k++) B.box('solid', px - w / 2, F + 0.45 + k * 0.39, zz - 0.02, px + w / 2, F + 0.47 + k * 0.39, zz + 0.02, '#7a5a40');
-    B.quad('solid', px, F + 1.22, zz - 0.005, w - 0.1, 1.5, '#e8ecee');
+    B.quad('solid', px, F + 1.22, zz - 0.005, w - 0.1, 1.5, '#d4d8d4');
   }
   B.quad('inner', 1.45, F + 1.2, zf - 0.25, 1.8, 2.0, '#d8d0c0'); // genkan behind the frosted glass
   B.box('solid', d0 - 0.2, S.gy(1.4, Z + 0.4) - 0.08, Z, d1 + 0.2, F - 0.02, Z + 0.45, '#b8b2a8'); // step
@@ -91,10 +91,15 @@ export function buildTabako(S) {
   // --- futon airing over the upstairs railing (right window)
   const y2 = hs.y2;
   const fy = y2 + 1.35 - 0.45 + 0.78; // rail top
+  const fx0 = 1.24, fx1 = 2.16;
+  B.box('solid', 1.02, fy - 0.03, Z + 0.1, 2.38, fy + 0.01, Z + 0.14, '#b8bcc0'); // top rail, ends visible past the futon
   B.swayFn = (lx, ly) => Math.max(0, (fy - ly) / 0.8) * 0.3;
-  B.box('cloth', 1.12, fy - 0.78, Z + 0.12, 2.28, fy, Z + 0.17, '#f2c6c0');
-  B.box('cloth', 1.12, fy - 0.05, Z - 0.02, 2.28, fy + 0.03, Z + 0.17, '#f2c6c0');
+  B.box('cloth', fx0, fy - 0.74, Z + 0.15, fx1, fy, Z + 0.21, '#f2c6c0', { colors: { Z: '#f4ccc6' } });
+  B.box('cloth', fx0 + 0.005, fy - 0.62, Z + 0.212, fx1 - 0.005, fy - 0.56, Z + 0.216, '#e8a8b0'); // cover pattern bands
+  B.box('cloth', fx0 + 0.005, fy - 0.3, Z + 0.212, fx1 - 0.005, fy - 0.24, Z + 0.216, '#e8a8b0');
+  B.box('cloth', fx0, fy - 0.3, Z + 0.02, fx1, fy, Z + 0.08, '#f2c6c0'); // the half hanging inside
   B.swayFn = null;
-  for (let i = 0; i < 2; i++) B.box('deco', 1.35 + i * 0.7, fy - 0.2, Z + 0.17, 1.42 + i * 0.7, fy + 0.06, Z + 0.21, '#e8d8a8'); // clips
+  B.cyl('solid', fx0, fy - 0.02, Z + 0.115, 0.1, fx1 - fx0, '#f4ccc6', { rz: -Math.PI / 2, seg: 10, sz: 0.9 }); // rounded fold over the rail
+  for (let i = 0; i < 2; i++) B.box('deco', 1.45 + i * 0.5, fy - 0.12, Z + 0.2, 1.52 + i * 0.5, fy + 0.1, Z + 0.25, '#e8d8a8'); // futon clips
   return hs;
 }

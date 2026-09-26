@@ -1,0 +1,151 @@
+/**
+ * Renderer / scene / loop wiring and the `ctx` object handed to every world
+ * module's build(ctx).
+ */
+import * as THREE from 'three';
+import layout, { makeRng } from './layout.js';
+import toon, { TOON_UNIFORMS } from './toon.js';
+import geom from './geom.js';
+import tex, { setMaxAnisotropy } from './canvasTex.js';
+import { PALETTE } from './palette.js';
+import { createSim } from './sim.js';
+import { createLighting, SUN, setSunAngles } from './lighting.js';
+import { createPostFX, OUTLINE_LAYER } from './postfx.js';
+import { createControls } from './controls.js';
+import { createAudio } from './audio.js';
+
+export function createEngine(canvas, params) {
+  const quality = params.get('q') || (matchMedia('(pointer: coarse)').matches ? 'low' : 'high');
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: false,
+    powerPreference: 'high-performance',
+    preserveDrawingBuffer: params.has('shot'),
+  });
+  const maxDpr = quality === 'low' ? 1.25 : 2;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxDpr));
+  renderer.setSize(window.innerWidth, window.innerHeight, false);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.NeutralToneMapping;
+  renderer.toneMappingExposure = 1.0;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
+  renderer.shadowMap.autoUpdate = false;
+  setMaxAnisotropy(renderer.capabilities.getMaxAnisotropy());
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(PALETTE.skyHorizon);
+  scene.fog = new THREE.FogExp2(new THREE.Color('#dfe8f2'), 0.0021);
+
+  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.15, 2600);
+  camera.layers.enable(0);
+
+  if (params.has('sun')) {
+    const [az, el] = params.get('sun').split(',').map(Number);
+    setSunAngles(az, el);
+  }
+
+  const lighting = createLighting(scene, renderer, quality);
+  const sim = createSim({ startTime: params.has('t') ? Number(params.get('t')) : 0 });
+  if (params.has('pause')) sim.timeScale = 0;
+  const audio = createAudio();
+
+  const updaters = [];
+  const ctx = {
+    THREE,
+    scene,
+    camera,
+    renderer,
+    layout,
+    toon,
+    geom,
+    tex,
+    palette: PALETTE,
+    sim,
+    audio,
+    quality,
+    params,
+    sunDir: SUN.dir,
+    lighting,
+    rng: (seed) => makeRng(seed),
+    /** Register a per-frame callback (dt seconds (scaled sim time), t = sim.time). */
+    onUpdate(fn) { updaters.push(fn); },
+    /** Walk-mode collider (axis aligned box in world XZ). */
+    addCollider(minX, maxX, minZ, maxZ) { controls.addCollider(minX, maxX, minZ, maxZ); },
+    OUTLINE_LAYER,
+  };
+
+  const controls = createControls(camera, canvas, { onModeChange: (m) => ctx.onModeChange?.(m) });
+  const post = createPostFX(renderer, scene, camera, { quality, sunDir: SUN.dir });
+  if (params.get('fx') === '0') post.outline.uniforms.enabled.value = 0;
+
+  function resize() {
+    const w = window.innerWidth, h = window.innerHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    const s = renderer.getDrawingBufferSize(new THREE.Vector2());
+    post.setSize(s.x, s.y);
+  }
+  window.addEventListener('resize', resize);
+
+  /** Put outline-able meshes on the outline layer; call after modules add content. */
+  function assignLayers(root = scene) {
+    root.traverse((o) => {
+      if (!(o.isMesh || o.isInstancedMesh)) return;
+      const m = o.material;
+      const transparent = Array.isArray(m) ? false : (m.transparent || m.userData?.isGlass);
+      if (o.userData.noOutline || transparent) o.layers.disable(OUTLINE_LAYER);
+      else o.layers.enable(OUTLINE_LAYER);
+    });
+  }
+
+  const timer = new THREE.Timer();
+  timer.connect(document);
+  renderer.info.autoReset = false;
+  let frames = 0;
+  const frameWaiters = [];
+  let running = false;
+
+  function frame() {
+    timer.update();
+    const rdt = Math.min(timer.getDelta(), 0.1);
+    renderer.info.reset();
+    const dt = rdt * sim.timeScale;
+    sim.step(rdt);
+    for (const fn of updaters) fn(dt, sim.time, rdt);
+    controls.update(rdt);
+    lighting.update(camera);
+    post.render(rdt);
+    frames++;
+    for (let i = frameWaiters.length - 1; i >= 0; i--) {
+      if (frames >= frameWaiters[i].at) { frameWaiters[i].resolve(); frameWaiters.splice(i, 1); }
+    }
+  }
+
+  function start() {
+    if (running) return;
+    running = true;
+    timer.reset?.();
+    renderer.setAnimationLoop(frame);
+  }
+
+  function waitFrames(n) {
+    return new Promise((resolve) => frameWaiters.push({ at: frames + n, resolve }));
+  }
+
+  function stats() {
+    const info = renderer.info;
+    return {
+      drawCalls: info.render.calls,
+      triangles: info.render.triangles,
+      geometries: info.memory.geometries,
+      textures: info.memory.textures,
+      programs: info.programs?.length,
+      materials: toon.materialCount(),
+      frames,
+    };
+  }
+
+  return { renderer, scene, camera, ctx, controls, post, lighting, sim, audio, start, resize, assignLayers, waitFrames, stats, quality, TOON_UNIFORMS };
+}

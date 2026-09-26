@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>桜ヶ丘駅 · 三渲二樱花车站</title>
+    <meta name="description" content="A cel-shaded (三渲二) Japanese suburban sakura station scene built with Three.js." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Noto+Sans+JP:wght@400;700&family=Shippori+Mincho:wght@700&family=Zen+Maru+Gothic:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --ink: #3b3346;
+        --paper: rgba(255, 250, 246, 0.86);
+        --pink: #ef8fae;
+        --pink-deep: #d9668d;
+        --sky: #7fb2e6;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #dfe8f2; color: var(--ink);
+        font-family: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Yu Gothic", "Noto Sans JP", sans-serif; }
+      canvas#scene { display: block; width: 100vw; height: 100vh; outline: none; touch-action: none; }
+
+      #loading { position: fixed; inset: 0; display: grid; place-items: center; z-index: 20;
+        background: radial-gradient(120% 90% at 30% 20%, #fff6f8 0%, #f3e6ee 40%, #dfe8f2 100%); transition: opacity 0.9s ease; }
+      #loading.done { opacity: 0; pointer-events: none; }
+      #loading .card { text-align: center; }
+      #loading h1 { margin: 0 0 4px; font-size: clamp(28px, 5vw, 44px); letter-spacing: 0.12em; font-weight: 700; }
+      #loading .sub { opacity: 0.7; letter-spacing: 0.3em; font-size: 13px; }
+      #loading .bar { width: min(360px, 70vw); height: 6px; margin: 22px auto 10px; border-radius: 99px; background: rgba(0,0,0,0.08); overflow: hidden; }
+      #loading .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--pink), #f9c9d6); transition: width 0.3s; }
+      #loading .step { font-size: 13px; opacity: 0.75; min-height: 1.4em; }
+      .petal { position: absolute; width: 12px; height: 9px; background: #f7b9cb; border-radius: 80% 10% 80% 10%; opacity: 0.8; animation: fall linear infinite; }
+      @keyframes fall { from { transform: translate(0, -10vh) rotate(0deg); } to { transform: translate(-20vw, 110vh) rotate(720deg); } }
+
+      #ui { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+      #ui.hidden > *:not(#showui) { opacity: 0; pointer-events: none !important; }
+      #title { position: absolute; left: 22px; top: 18px; padding: 10px 16px 10px 14px; background: var(--paper); border-radius: 14px;
+        box-shadow: 0 6px 24px rgba(80, 60, 100, 0.12); backdrop-filter: blur(6px); transition: opacity 0.4s; }
+      #title .jp { font-size: 22px; font-weight: 700; letter-spacing: 0.14em; }
+      #title .jp small { font-size: 12px; margin-left: 8px; letter-spacing: 0.1em; opacity: 0.7; }
+      #title .en { font-size: 11px; letter-spacing: 0.22em; opacity: 0.6; text-transform: uppercase; }
+      #title .line { display: inline-block; width: 22px; height: 6px; border-radius: 3px; background: var(--pink); margin-right: 8px; vertical-align: middle; }
+
+      #bar { position: absolute; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; flex-wrap: wrap; gap: 6px;
+        justify-content: center; padding: 8px; background: var(--paper); border-radius: 16px; box-shadow: 0 6px 24px rgba(80, 60, 100, 0.14);
+        pointer-events: auto; max-width: calc(100vw - 24px); transition: opacity 0.4s; backdrop-filter: blur(6px); }
+      #bar button { font: inherit; font-size: 13px; border: 0; padding: 7px 12px; border-radius: 10px; background: transparent; color: var(--ink); cursor: pointer; }
+      #bar button:hover { background: rgba(239, 143, 174, 0.16); }
+      #bar button.on { background: var(--pink); color: white; }
+      #bar .sep { width: 1px; background: rgba(0,0,0,0.1); margin: 4px 2px; }
+      #hint { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 14px 18px; border-radius: 14px; background: var(--paper);
+        text-align: center; font-size: 14px; line-height: 1.7; display: none; pointer-events: auto; cursor: pointer; }
+      #hint b { color: var(--pink-deep); }
+      #crosshair { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: rgba(255,255,255,0.8);
+        box-shadow: 0 0 0 1px rgba(0,0,0,0.2); display: none; }
+      #showui { position: absolute; right: 16px; top: 16px; pointer-events: auto; font: inherit; font-size: 12px; border: 0; padding: 6px 10px; border-radius: 10px;
+        background: var(--paper); color: var(--ink); cursor: pointer; opacity: 0.0; transition: opacity 0.3s; }
+      #ui.hidden #showui { opacity: 0.75; }
+      #warn { position: absolute; right: 16px; bottom: 90px; max-width: 320px; font-size: 12px; padding: 8px 12px; border-radius: 10px; background: rgba(255,240,240,0.9); display: none; }
+      @media (max-width: 640px) {
+        #title { left: 12px; top: 12px; padding: 8px 12px; }
+        #title .jp { font-size: 18px; }
+        #bar button { font-size: 12px; padding: 6px 9px; }
+      }
+      body.shotmode #ui, body.shotmode #loading { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <canvas id="scene" tabindex="0"></canvas>
+
+    <div id="loading">
+      <div class="card">
+        <h1>桜ヶ丘駅</h1>
+        <div class="sub">SAKURAGAOKA STATION</div>
+        <div class="bar"><i id="loadbar"></i></div>
+        <div class="step" id="loadstep">准备中…</div>
+      </div>
+    </div>
+
+    <div id="ui">
+      <div id="title">
+        <div class="jp"><span class="line"></span>桜ヶ丘駅<small>さくらがおか</small></div>
+        <div class="en">Harukaze Line · Spring, 16:00</div>
+      </div>
+      <div id="bar"></div>
+      <div id="hint">
+        <div><b>漫游模式</b> · 点击画面开始</div>
+        <div>WASD / 方向键 移动 · Shift 奔跑 · 鼠标 转向 · Esc 退出</div>
+      </div>
+      <div id="crosshair"></div>
+      <div id="warn"></div>
+      <button id="showui">显示界面 (H)</button>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

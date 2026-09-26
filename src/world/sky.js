@@ -214,51 +214,109 @@ function mountains() {
   return group;
 }
 
-/** Instanced far-away houses: hillside north of the river + a ring around the town. */
+/** Wall texture for distant houses: near-white plaster (tinted per instance) with window rows. */
+function farWallTexture(rows) {
+  return drawTexture(256, 256, (ctx, W, H) => {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, W, H);
+    // faint base band + eave shadow
+    ctx.fillStyle = 'rgba(120,120,140,0.18)';
+    ctx.fillRect(0, H - 14, W, 14);
+    ctx.fillStyle = 'rgba(90,90,120,0.22)';
+    ctx.fillRect(0, 0, W, 10);
+    const rowH = (H - 30) / rows;
+    for (let r = 0; r < rows; r++) {
+      const y = 16 + r * rowH + rowH * 0.22;
+      const h = rowH * 0.42;
+      const n = rows > 2 ? 5 : 3;
+      for (let i = 0; i < n; i++) {
+        if (rows <= 2 && (i + r) % 3 === 2) continue; // irregular houses
+        const w = (W / n) * 0.52;
+        const x = (W / n) * (i + 0.24);
+        ctx.fillStyle = '#6f84a3';
+        ctx.fillRect(x, y, w, h);
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.fillRect(x + w * 0.08, y + h * 0.1, w * 0.18, h * 0.8);
+        if (rows > 2) { ctx.fillStyle = 'rgba(80,80,100,0.35)'; ctx.fillRect(x - 3, y + h, w + 6, 4); } // balcony line
+      }
+    }
+  }, { mipmaps: true });
+}
+
+/** Triangular gable prism (unit: base 1x1 at y=0, ridge along X at y=1). */
+function gablePrism() {
+  const shape = new THREE.Shape();
+  shape.moveTo(-0.5, 0);
+  shape.lineTo(0.5, 0);
+  shape.lineTo(0, 1);
+  shape.lineTo(-0.5, 0);
+  const g = new THREE.ExtrudeGeometry(shape, { depth: 1, bevelEnabled: false });
+  g.translate(0, 0, -0.5);
+  g.rotateY(Math.PI / 2); // extrusion now along X, triangle in the ZY plane
+  return g;
+}
+
+/**
+ * Instanced far-away town: small houses in lanes on the hillside north of the
+ * river plus a ring beyond the walkable area, a few apartment blocks.  Pastel,
+ * no outlines, cheap (4 draw calls).
+ */
 function farTown(ctx) {
   const rng = makeRng(2024);
   const body = new THREE.BoxGeometry(1, 1, 1);
   body.translate(0, 0.5, 0);
-  const roof = new THREE.ConeGeometry(0.75, 0.45, 4, 1);
-  roof.rotateY(Math.PI / 4);
-  roof.scale(1, 1, 0.8);
-  const walls = [];
+  const roof = gablePrism();
+  const houses = [];
   const roofs = [];
-  const wallCols = ['#f1ece2', '#e8dfcf', '#e6e9ee', '#efe6da', '#dfe5ea', '#f3efe8'];
-  const roofCols = ['#5d6672', '#56677a', '#6a5a50', '#4f6b5e', '#7a6f6a', '#6b7788'];
-  const add = (x, z, s = 1) => {
+  const blocks = [];
+  const wallCols = ['#f4efe6', '#ece3d3', '#e9edf1', '#f1e7dc', '#e2e9ee', '#f6f2ea', '#efe1d6', '#e6ecdf'];
+  const roofCols = ['#5d6672', '#56677a', '#6a5a50', '#4f6b5e', '#7b6f6a', '#687a8e', '#8a5a4c', '#4d5a6b'];
+  const addHouse = (x, z, s = 1, ry = 0) => {
     const y = groundY(x, z);
-    const w = (6 + rng() * 4) * s, d = (6 + rng() * 3) * s, h = (rng() < 0.2 ? 3.3 : 6) * s;
-    const ry = (rng() - 0.5) * 0.4;
-    walls.push({ x, y, z, ry, sx: w, sy: h, sz: d, color: rng.pick(wallCols) });
-    roofs.push({ x, y: y + h + 0.22 * w * 0.6, z, ry, sx: w * 1.15, sy: w * 0.6, sz: d * 1.35, color: rng.pick(roofCols) });
+    const w = (7 + rng() * 3) * s, d = (6 + rng() * 2.5) * s, h = (rng() < 0.18 ? 3.1 : 5.7) * s;
+    ry += (rng() - 0.5) * 0.25 + (rng() < 0.35 ? Math.PI / 2 : 0);
+    houses.push({ x, y: y - 0.3, z, ry, sx: w, sy: h + 0.3, sz: d, color: rng.pick(wallCols) });
+    roofs.push({ x, y: y + h - 0.05, z, ry, sx: w * 1.12, sy: d * 0.36, sz: d * 1.18, color: rng.pick(roofCols) });
   };
-  // hillside north of the river
-  for (let i = 0; i < 520; i++) {
-    const x = -420 + rng() * 840;
-    const z = TERRAIN.farLeveeTopNorth - 8 - rng() * 330;
-    if (rng() < Math.abs(x) / 900) continue;
-    add(x, z, 0.9 + rng() * 0.3);
+  const addBlock = (x, z) => {
+    const y = groundY(x, z);
+    const floors = 3 + Math.floor(rng() * 3);
+    blocks.push({ x, y: y - 0.3, z, ry: (rng() - 0.5) * 0.2, sx: 22 + rng() * 14, sy: floors * 2.9 + 0.3, sz: 9 + rng() * 3, color: rng.pick(['#f3f1ec', '#ece8e0', '#e8ecef']) });
+  };
+  // hillside north of the river: lanes that follow the contour (houses on both sides)
+  for (let lane = 0; lane < 14; lane++) {
+    const z0 = TERRAIN.farLeveeTopNorth - 14 - lane * 22 - rng() * 6;
+    for (let x = -430; x < 430; x += 11 + rng() * 7) {
+      if (rng() < 0.12 + Math.abs(x) / 1400) continue;
+      const wob = Math.sin(x * 0.012 + lane) * 6;
+      addHouse(x, z0 + wob + (rng() < 0.5 ? -6 : 6), 0.95 + rng() * 0.2);
+    }
+    if (lane % 3 === 1) for (let k = 0; k < 3; k++) addBlock(-300 + rng() * 600, z0 - 3);
   }
   // east / west / south outskirts beyond the walkable area
-  for (let i = 0; i < 520; i++) {
+  for (let i = 0; i < 620; i++) {
     const a = rng() * Math.PI * 2;
     const r = 175 + rng() * 260;
     const x = Math.cos(a) * r, z = 40 + Math.sin(a) * r * 0.9;
-    if (z < -60) continue; // north handled above (river / levee)
+    if (z < -60) continue; // north is the river / hillside
     if (x > WALK_BOUNDS.xMin - 15 && x < WALK_BOUNDS.xMax + 15 && z > -60 && z < WALK_BOUNDS.zMax + 20) continue;
-    add(x, z, 0.9 + rng() * 0.3);
+    addHouse(x, z, 0.95 + rng() * 0.2, Math.round(a / (Math.PI / 2)) * (Math.PI / 2));
+    if (rng() < 0.03) addBlock(x + 20, z + 10);
   }
   const toon = ctx.toon;
-  const mk = (geo, list) => {
-    const im = ctx.geom.instanced(geo, toon.mat('#ffffff'), list.map((t) => ({ x: t.x, y: t.y, z: t.z, ry: t.ry, sx: t.sx, sy: t.sy, sz: t.sz })), { castShadow: false });
+  const mk = (geo, mat, list) => {
+    const im = ctx.geom.instanced(geo, mat, list.map((t) => ({ x: t.x, y: t.y, z: t.z, ry: t.ry, sx: t.sx, sy: t.sy, sz: t.sz })), { castShadow: false, noOutline: true });
     list.forEach((t, i) => im.setColorAt(i, new THREE.Color(t.color)));
     im.instanceColor.needsUpdate = true;
     return im;
   };
   const group = new THREE.Group();
   group.name = 'farTown';
-  group.add(mk(body, walls), mk(roof, roofs));
+  group.add(
+    mk(body, toon.mat('#ffffff', { map: farWallTexture(2), name: 'farHouseWall' }), houses),
+    mk(roof, toon.mat('#ffffff', { name: 'farHouseRoof' }), roofs),
+    mk(body, toon.mat('#ffffff', { map: farWallTexture(4), name: 'farBlockWall' }), blocks),
+  );
   return group;
 }
 

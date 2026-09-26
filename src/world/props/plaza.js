@@ -321,7 +321,7 @@ function tulip(kit, x, y, z, color, rng) {
 }
 
 function pansy(kit, x, y, z, cols, rng) {
-  kit.push(kit.mtx(x, y, z, -0.45 - rng() * 0.3, rng() * 6.28));
+  kit.push(kit.mtx(x, y, z, -0.45 - rng() * 0.3, rng() * 6.28, 0, 1.25));
   kit.sphere(0.065, 0, -0.015, 0, 'vc', '#6f9a58', { sy: 0.45, ws: 7, hs: 4, no: true, cast: false });
   // five round petals: two upper (darker), three lower with a face blotch
   for (let i = 0; i < 5; i++) {
@@ -380,8 +380,9 @@ function flowerBeds(kit, rng) {
     wall(kt, b.d - kt * 2, b.w / 2 - kt / 2, 0);
     wall(kt, b.d - kt * 2, -b.w / 2 + kt / 2, 0);
     // soil
-    kit.box(b.w - kt * 2, 0.05, b.d - kt * 2, 0, kh - 0.1, 0, 'vc', '#7a5f48', { bottom: true, cast: false });
-    const sy = kh - 0.05;
+    // soil heaped almost to the coping so low pansies stay visible over the kerb
+    kit.box(b.w - kt * 2, 0.06, b.d - kt * 2, 0, kh - 0.065, 0, 'vc', '#7a5f48', { bottom: true, cast: false });
+    const sy = kh - 0.005;
     const ix = b.w / 2 - kt - 0.08, iz = b.d / 2 - kt - 0.08;
     if (b.w > b.d) {
       // long beds: shrubs at the ends, tulip rows in the middle, pansies + daisies along the front

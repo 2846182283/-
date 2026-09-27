@@ -64,7 +64,7 @@ function tuftGeometry(blades = 9, seed = 1, spread = 1) {
     const a = (i / blades) * Math.PI * 2 + rng() * 0.9;
     const lean = (0.25 + rng() * 0.45) * spread;
     const h = 0.5 + rng() * 0.5;
-    const w = (0.035 + rng() * 0.025) * Math.max(0.6, spread);
+    const w = (0.05 + rng() * 0.035) * Math.max(0.6, spread);
     const r0 = 0.05 + rng() * 0.06;
     const ca = Math.cos(a), sa = Math.sin(a);
     const px = -sa * w, pz = ca * w;
@@ -222,9 +222,9 @@ export function buildVegetation(ctx, { gutterRuns, stairs, carPark, crops = [], 
   for (let x = -180; x < 180; x += 0.55) {
     if (Math.abs(x - 32) < 4.5) continue;
     if (x < px0 || x > px1) {
-      if (rng() < 0.5) tuft(tufts, x + rng() * 0.4, LIFT.path, zS - 0.1 - rng() * 0.3, 0.18 + rng() * 0.32, 1, rng() < 0.3 ? DRY : GREENS);
+      if (rng() < 0.4) tuft(tufts, x + rng() * 0.4, LIFT.path, zS - 0.1 - rng() * 0.3, 0.18 + rng() * 0.32, 1, rng() < 0.3 ? DRY : GREENS);
     }
-    if (rng() < 0.5) tuft(tufts, x + rng() * 0.4, LIFT.path, zN + 0.1 + rng() * 0.3, 0.18 + rng() * 0.35, 1, rng() < 0.3 ? DRY : GREENS);
+    if (rng() < 0.4) tuft(tufts, x + rng() * 0.4, LIFT.path, zN + 0.1 + rng() * 0.3, 0.18 + rng() * 0.35, 1, rng() < 0.3 ? DRY : GREENS);
     // verge between the north road band and the fence
     if (rng() < 0.55) tuft(tufts, x + rng() * 0.5, 0, NR.z + NR.gutter[1] + 0.45 + rng() * 1.3, 0.12 + rng() * 0.28, 1.2);
     if (rng() < 0.06) flower(x, 0.0, NR.z + NR.gutter[1] + 0.5 + rng() * 1.2, rng.pick(flowerKinds));
@@ -249,13 +249,13 @@ export function buildVegetation(ctx, { gutterRuns, stairs, carPark, crops = [], 
   // slopes (inner south slope, river-side slope above the revetment)
   const slopeBands = [[T.leveeSouthFoot - 0.2, T.leveeTopSouth + 0.1], [REVET.south[1] + 0.3, T.leveeTopNorth - 0.1]];
   // (weighted towards the stretch seen from the levee / hero views)
-  const nSlope = Math.round(1600 * (ctx.lod?.density ?? 1));
+  const nSlope = Math.round(1000 * (ctx.lod?.density ?? 1));
   for (let i = 0; i < nSlope; i++) {
     const x = i % 3 === 0 ? -210 + rng() * 420 : -80 + rng() * 160;
     const band = slopeBands[i % 2];
     const z = band[0] + rng() * (band[1] - band[0]);
     if (stairs && Math.abs(x - stairs.x) < 1.6) continue;
-    const n = 2 + Math.floor(rng() * 4);
+    const n = 1 + Math.floor(rng() * 3);
     for (let k = 0; k < n; k++) {
       const xx = x + (rng() - 0.5) * 0.7, zz = z + (rng() - 0.5) * 0.4;
       tuft(tufts, xx, groundY(xx, zz) - 0.01, zz, 0.08 + rng() * 0.18, 1.2, rng() < 0.15 ? DRY : GREENS);
@@ -264,7 +264,7 @@ export function buildVegetation(ctx, { gutterRuns, stairs, carPark, crops = [], 
     if (rng() < 0.4) flower(x - 0.3, groundY(x - 0.3, z), z - 0.15, rng.pick(flowerKinds));
   }
   // far levee: sparser
-  for (let i = 0; i < 500; i++) {
+  for (let i = 0; i < 200; i++) {
     const x = -260 + rng() * 520;
     const z = T.farLeveeTopSouth + 0.3 - rng() * (T.farLeveeTopSouth - REVET.north[0] - 0.6);
     tuft(tufts, x, groundY(x, z) - 0.01, z, 0.12 + rng() * 0.2, 1.2);
@@ -314,7 +314,7 @@ export function buildVegetation(ctx, { gutterRuns, stairs, carPark, crops = [], 
   // ---- lanes: vegetable-plot crops, weedy vacant lots, lane verges ----------------------
   for (const c of crops) tuft(tufts, c.x, c.y, c.z, c.h, c.w, CROPS[c.pal]);
   for (const p of grassPlots) {
-    for (let i = 0; i < 26; i++) {
+    for (let i = 0; i < 16; i++) {
       const x = p.x0 + 0.5 + rng() * (p.x1 - p.x0 - 1), z = p.z0 + 0.5 + rng() * (p.z1 - p.z0 - 1);
       cluster(x, z, groundY(x, z), 2 + Math.floor(rng() * 3), 0.35, 0.12, 0.38, rng() < 0.3 ? DRY : GREENS);
       if (rng() < 0.5) flower(x + 0.3, groundY(x + 0.3, z), z, rng.pick(flowerKinds));
@@ -323,7 +323,7 @@ export function buildVegetation(ctx, { gutterRuns, stairs, carPark, crops = [], 
   for (const l of LANES) {
     // south verge (no gutter on that side): weeds along the asphalt edge
     for (let x = l.x0 + 0.5; x < l.x1 - 0.5; x += 0.7) {
-      if (rng() < 0.45) {
+      if (rng() < 0.3) {
         const z = l.z + l.shoulder + 0.08 + rng() * 0.4;
         tuft(tufts, x + rng() * 0.3, groundY(x, z), z, 0.1 + rng() * 0.22);
       }
@@ -333,14 +333,28 @@ export function buildVegetation(ctx, { gutterRuns, stairs, carPark, crops = [], 
   // ---- meshes --------------------------------------------------------------------------------
   const tuftMat = ctx.toon.mat('#ffffff', { vertexColors: true, side: THREE.DoubleSide, vertexPatch: SWAY, name: 'terrainTuft' });
   const out = [];
-  const mk = (geo, list, name) => {
-    // geom.instanced applies each matrix's .color as the instance colour
-    const im = ctx.geom.instanced(geo, tuftMat, list, { castShadow: false, noOutline: true });
-    im.name = name;
-    out.push(im);
+  // Instances are split into a few spatial buckets (3 x-bands x town / levee) so frustum
+  // culling drops the tufts behind or beside the camera.
+  const bucketOf = (mm) => {
+    const x = mm.elements[12], z = mm.elements[14];
+    return `${x < -45 ? 0 : x < 45 ? 1 : 2}|${z < -52 ? 0 : 1}`;
   };
-  mk(tuftGeometry(9, 3, 1.1), tufts, 'terrain:tufts');
-  mk(tuftGeometry(7, 9, 0.6), reeds, 'terrain:reeds');
+  const mk = (geo, list, name, split = true) => {
+    const buckets = new Map();
+    for (const mm of list) {
+      const k = split ? bucketOf(mm) : 'all';
+      if (!buckets.has(k)) buckets.set(k, []);
+      buckets.get(k).push(mm);
+    }
+    for (const [k, items] of buckets) {
+      // geom.instanced applies each matrix's .color as the instance colour
+      const im = ctx.geom.instanced(geo, tuftMat, items, { castShadow: false, noOutline: true });
+      im.name = `${name}:${k}`;
+      out.push(im);
+    }
+  };
+  mk(tuftGeometry(5, 3, 1.1), tufts, 'terrain:tufts');
+  mk(tuftGeometry(5, 9, 0.6), reeds, 'terrain:reeds', false);
 
   const fg = fb.build({ colors: true });
   fg.setAttribute('sway', new THREE.Float32BufferAttribute(sway, 1));

@@ -513,7 +513,7 @@ function brick(g, w, h, rnd) {
     for (let c = -1; c < 5; c++) {
       const x = c * bw + (r % 2 ? bw / 2 : 0);
       // faded, weathered brick (muted terracotta so the plaza stays pastel)
-      const tone = ['#b87864', '#c4866f', '#ab6f5e', '#c99380', '#b57f6c', '#bf8a78'][Math.floor(rnd() * 6)];
+      const tone = ['#c08874', '#cb957f', '#b57e6c', '#d2a08c', '#bd8c7a', '#c79886'][Math.floor(rnd() * 6)];
       g.fillStyle = tone;
       g.fillRect(x + 2, r * bh + 2, bw - 4, bh - 4);
       g.fillStyle = 'rgba(255,255,255,0.12)';

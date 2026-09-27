@@ -51,7 +51,7 @@ export function buildCharacter(recipe, shared) {
   const rig = makeRig(P, (typeof recipe.bones === 'function' ? recipe.bones(P) : recipe.bones) || []);
   const RM = new RigMesh(rig.index);
   const D = new RigMesh(rig.index);
-  const skin = recipe.skin || '#fbe3d3';
+  const skin = recipe.skin || '#f5d4c1';
 
   // face + head
   const faceRect = atlas.cell(`face_${recipe.id}`, (g, S) => paintFace(g, S, { skin, ...recipe.face }));

@@ -15,12 +15,15 @@
  *   salaryman           taps the ticket machine screen
  *   walker              strolls north along the main street (looping walk cycle)
  *   mother + child      the child points up at the grand tree
+ *   (+ people/outskirts.js: a girl photographing the foreground sakura, a shopper at the
+ *    zakka shop, a grandpa with his shiba and a student sitting on the levee slope)
  */
 import * as THREE from 'three';
 import { buildCharacter, fitBounds } from './character.js';
 import { recipes } from './recipes.js';
 import { vnoise } from './rig.js';
 import { ss } from './mesh.js';
+import { buildOutskirts } from './outskirts.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -171,7 +174,6 @@ export function buildCast(ctx, shared) {
       a.w(sd.x, sd.y + 0.045, sd.z, grip);
       a.arm('R', grip, -0.8, -0.6, -0.2, -0.3);
     }, (a, t, dt) => {
-      breathe(a, t, 2);
       ponytail(a, t);
       // look toward the nearest approaching / passing train while the crossing is active
       let target = 0;
@@ -180,12 +182,15 @@ export function buildCast(ctx, shared) {
         for (const tr of sim.trains) { const d = Math.abs(tr.x - 32); if (d < bd) { bd = d; best = tr; } }
         if (best) {
           look.set(best.x, 2.5, best.z);
-          target = a.headToward(look, 1.1).yaw;
+          target = a.headToward(look, 1.0).yaw;
         }
       } else target = vnoise(t * 0.15, 3) * 0.35 - 0.1;
-      yawS += (target - yawS) * Math.min(1, dt * 2.5);
-      a.p.delta('head', 0.02 + vnoise(t * 0.3, 5) * 0.04, yawS, 0.05);
-      a.p.delta('neck', 0, yawS * 0.3, 0);
+      yawS += (target - yawS) * (dt > 0 ? Math.min(1, dt * 2.5) : 1); // paused (dt = 0): settle at once
+      // split the turn over neck and head (<= 1.0 rad in total; the chest stays put so her
+      // hands stay on the bike), so the face never swings round past the shoulder line
+      breathe(a, t, 2);
+      a.p.delta('neck', 0, yawS * 0.4, 0);
+      a.p.delta('head', 0.02 + vnoise(t * 0.3, 5) * 0.04, yawS * 0.6, 0.05);
     }, 0);
     ctx.addCollider(Math.min(gx, bikeWorld.x) - 0.35, Math.max(gx, bikeWorld.x) + 0.3, gz - 1.0, gz + 0.8);
   }
@@ -472,7 +477,7 @@ export function buildCast(ctx, shared) {
       while (h - prev < -Math.PI) h += Math.PI * 2;
       path[i * 4 + 3] = h;
     }
-    add(R.walker, 0, 0, 60, 0, (a) => {
+    const walker = add(R.walker, 0, 0, 60, 0, (a) => {
       a.p.set('spine', 0.12, 0, 0).set('chest', 0.05, 0, 0).set('neck', -0.05, 0, 0).set('head', -0.08, 0, 0);
       // hands clasped behind the back
       for (const [sd, sx] of [['L', 1], ['R', -1]]) {
@@ -502,6 +507,7 @@ export function buildCast(ctx, shared) {
       a.p.delta('chest', 0.01 * Math.cos(2 * ph), -0.05 * sw, 0);
       a.p.delta('head', 0.02 * Math.cos(2 * ph), vnoise(t * 0.1, 21) * 0.4, 0);
     }, 0);
+    walker.moving = true;
   }
 
   // ---- 13-14. mother and child by the grand sakura -------------------------------------------------
@@ -541,9 +547,34 @@ export function buildCast(ctx, shared) {
     });
   }
 
-  // one updater for the whole cast
+  // ---- 15-18. the street further south and the levee (people/outskirts.js) ---------------------
+  // extra objects (the shiba, the leash) join the distance cull through `far`
+  const farExtras = [];
+  const outskirts = buildOutskirts(ctx, shared, { add, R, breathe, group, far: (o) => farExtras.push(o) });
+
+  // one updater for the whole cast.  Figures beyond FAR_CULL metres are hidden (a person is
+  // ~12 px tall there, and at that range they are behind the station / trees anyway), and so
+  // are figures more than BEHIND metres behind the camera (too far for even their long
+  // afternoon shadows to reach the view): this keeps them out of the main, outline and shadow
+  // passes of frames that cannot show them.
+  const FAR_CULL2 = 85 * 85, BEHIND = 7;
+  const cam = ctx.camera.position;
+  const fwd = new THREE.Vector3();
+  const near = (o) => {
+    const dx = o.position.x - cam.x, dz = o.position.z - cam.z;
+    return dx * dx + dz * dz < FAR_CULL2 && dx * fwd.x + dz * fwd.z > -BEHIND;
+  };
   ctx.onUpdate((dt, t) => {
-    for (const a of actors) if (a.update) a.update(a, t, dt);
+    ctx.camera.getWorldDirection(fwd);
+    fwd.y = 0;
+    fwd.normalize();
+    for (const a of actors) {
+      a.o.visible = near(a.o);
+      // skip the IK / idle work for hidden figures (the walker keeps walking: his position is the update)
+      if (a.update && (a.o.visible || a.moving)) a.update(a, t, dt);
+    }
+    for (const o of farExtras) o.visible = near(o);
+    outskirts(dt, t);
   });
   return { group, actors };
 }

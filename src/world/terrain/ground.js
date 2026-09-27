@@ -209,35 +209,79 @@ export function buildGround(ctx, tex) {
       k++;
     }
   }
-  const idx = new Uint32Array((nx - 1) * (nz - 1) * 6);
-  let q = 0;
-  for (let j = 0; j < nz - 1; j++) {
-    for (let i = 0; i < nx - 1; i++) {
-      const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1;
-      // x right, z "down": (a, c, b) faces +y
-      idx[q++] = a; idx[q++] = c; idx[q++] = b;
-      idx[q++] = b; idx[q++] = c; idx[q++] = d;
-    }
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  g.setAttribute('splat', new THREE.BufferAttribute(spl, 2));
-  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-  g.setIndex(new THREE.BufferAttribute(idx, 1));
-  g.computeVertexNormals();
-  g.computeBoundingSphere();
+  // shared vertex attributes; normals from the whole grid so chunk seams stay smooth
+  const attrs = {
+    position: new THREE.BufferAttribute(pos, 3),
+    color: new THREE.BufferAttribute(col, 3),
+    splat: new THREE.BufferAttribute(spl, 2),
+    uv: new THREE.BufferAttribute(uv, 2),
+  };
+  const full = new THREE.BufferGeometry();
+  for (const [n, a] of Object.entries(attrs)) full.setAttribute(n, a);
+  full.setIndex(new THREE.BufferAttribute(gridIndex(nx, 0, nx - 1, 0, nz - 1), 1));
+  full.computeVertexNormals();
+  const normal = full.getAttribute('normal');
 
+  // Chunks (3 x 3 blocks of cells) share the attributes but have their own index and
+  // bounding sphere, so frustum culling skips the ground behind / beside the camera.
+  const iCuts = [0, ...[-70, 30].map((c) => nearestIndex(xs, c)), nx - 1];
+  const jCuts = [0, ...[-58, 30].map((c) => nearestIndex(zs, c)), nz - 1];
+  const group = new THREE.Group();
+  group.name = 'terrain:groundChunks';
   const mat = ctx.toon.mat('#ffffff', {
     vertexColors: true,
     onShader: groundShader(tex.detail, tex.flowers),
     onShaderKey: 'terrainGround',
     name: 'terrainGround',
   });
-  const mesh = new THREE.Mesh(g, mat);
-  mesh.name = 'terrain:ground';
-  mesh.receiveShadow = true;
-  mesh.castShadow = false;
-  mesh.userData.dynamic = true; // keep out of bakeStatic (custom attribute)
-  return mesh;
+  for (let a = 0; a < iCuts.length - 1; a++) {
+    for (let b = 0; b < jCuts.length - 1; b++) {
+      const g = new THREE.BufferGeometry();
+      for (const [n, at] of Object.entries(attrs)) g.setAttribute(n, at);
+      g.setAttribute('normal', normal);
+      g.setIndex(new THREE.BufferAttribute(gridIndex(nx, iCuts[a], iCuts[a + 1], jCuts[b], jCuts[b + 1]), 1));
+      g.boundingSphere = chunkSphere(pos, nx, iCuts[a], iCuts[a + 1], jCuts[b], jCuts[b + 1]);
+      const mesh = new THREE.Mesh(g, mat);
+      mesh.name = `terrain:ground:${a}${b}`;
+      mesh.receiveShadow = true;
+      mesh.castShadow = false;
+      mesh.userData.dynamic = true; // keep out of bakeStatic (custom attribute)
+      group.add(mesh);
+    }
+  }
+  return group;
+}
+
+/** Index buffer for grid cells i0..i1-1 x j0..j1-1 of a grid nx wide. */
+function gridIndex(nx, i0, i1, j0, j1) {
+  const idx = new Uint32Array((i1 - i0) * (j1 - j0) * 6);
+  let q = 0;
+  for (let j = j0; j < j1; j++) {
+    for (let i = i0; i < i1; i++) {
+      const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1;
+      // x right, z "down": (a, c, b) faces +y
+      idx[q++] = a; idx[q++] = c; idx[q++] = b;
+      idx[q++] = b; idx[q++] = c; idx[q++] = d;
+    }
+  }
+  return idx;
+}
+
+function nearestIndex(lines, v) {
+  let best = 0;
+  for (let i = 1; i < lines.length; i++) if (Math.abs(lines[i] - v) < Math.abs(lines[best] - v)) best = i;
+  return best;
+}
+
+/** Bounding sphere of the vertices of one chunk. */
+function chunkSphere(pos, nx, i0, i1, j0, j1) {
+  const box = new THREE.Box3();
+  const v = new THREE.Vector3();
+  for (let j = j0; j <= j1; j++) {
+    for (let i = i0; i <= i1; i++) {
+      const k = (j * nx + i) * 3;
+      box.expandByPoint(v.set(pos[k], pos[k + 1], pos[k + 2]));
+    }
+  }
+  return box.getBoundingSphere(new THREE.Sphere());
 }

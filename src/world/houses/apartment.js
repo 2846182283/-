@@ -109,6 +109,7 @@ export function buildApartment(B, P, D) {
   B.box('metal', x0 - 0.02, yF, zs1 - 0.06, x0 + 0.05, yF + 0.97, zs1, STEEL);
   B.box('solid', x0, yF + 0.1, zs1 - 0.03, land1, yF + 0.9, zs1 - 0.02, '#d9e2e8');
   B.box('solid', x0 + 0.02, yF + 0.1, zc - 0.1, x0 + 0.03, yF + 0.9, zs1 - 0.05, '#d9e2e8');
+  (P.solids ||= []).push({ x0: land1 + 0.6, x1: xBot + 0.3, z0: zs0, z1: zs1 });
   // landing column
   B.box('metal', x0 + 0.02, g(x0, zs1) - 0.05, zs1 - 0.14, x0 + 0.14, yF - 0.2, zs1 - 0.02, STEEL);
 

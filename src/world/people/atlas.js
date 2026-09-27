@@ -309,6 +309,30 @@ export function paintCatFace(g, S, c) {
     g.ellipse(px(0), py(-0.62), S * 0.16, S * 0.1, 0, 0, Math.PI * 2);
     g.fill();
   }
+  if (c.dog) {
+    // shiba: cream cheeks + 'maro' brow dots, round dark eyes with a catch-light
+    g.fillStyle = c.muzzle || c.shade;
+    for (const sx of [-1, 1]) {
+      g.beginPath();
+      g.ellipse(px(sx * 0.42), py(-0.55), S * 0.13, S * 0.09, sx * 0.3, 0, Math.PI * 2);
+      g.fill();
+      g.beginPath();
+      g.ellipse(px(sx * 0.3), py(0.14), S * 0.035, S * 0.024, 0, 0, Math.PI * 2);
+      g.fill();
+    }
+    for (const sx of [-1, 1]) {
+      const ex = px(sx * 0.34), ey = py(-0.12);
+      g.fillStyle = c.eye;
+      g.beginPath();
+      g.ellipse(ex, ey, S * 0.042, S * 0.046, 0, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = '#ffffff';
+      g.beginPath();
+      g.arc(ex - S * 0.014, ey - S * 0.016, S * 0.012, 0, Math.PI * 2);
+      g.fill();
+    }
+    return;
+  }
   // eyes: almond, coloured iris with slit pupil
   for (const sx of [-1, 1]) {
     const ex = px(sx * 0.36), ey = py(-0.12);

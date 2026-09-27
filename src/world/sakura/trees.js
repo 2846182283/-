@@ -87,17 +87,18 @@ function surfaceCards(c, n, rng, region, t, list) {
  */
 function fringeCards(c, rng, t, list) {
   const tmp = new THREE.Vector3();
-  const nRim = 5, nUnder = 3;
+  const nRim = 9, nUnder = 8;
   const a0 = rng() * Math.PI * 2;
   for (let k = 0; k < nRim + nUnder; k++) {
     const under = k >= nRim;
-    const a = under ? rng() * Math.PI * 2 : a0 + (k / nRim) * Math.PI * 2 + (rng() - 0.5) * 0.7;
-    const rr = under ? 0.25 + rng() * 0.55 : 1.0 + rng() * 0.12;
-    const dy = under ? -0.38 - rng() * 0.12 : (rng() - 0.35) * 0.4;
+    const a = under ? rng() * Math.PI * 2 : a0 + (k / nRim) * Math.PI * 2 + (rng() - 0.5) * 0.5;
+    const rr = under ? 0.15 + Math.sqrt(rng()) * 0.75 : 1.02 + rng() * 0.15;
+    // (underside sprigs hang just below the mass: a ragged blossom fringe, not a flat plate)
+    const dy = under ? -0.48 - rng() * 0.22 : (rng() - 0.3) * 0.45;
     const p = c.p.clone().add(tmp.set(Math.cos(a) * rr * c.s.x * 0.8, dy * c.s.y + c.s.y * 0.05, Math.sin(a) * rr * c.s.z * 0.8));
     const d = tmp.set(Math.cos(a), under ? -1.2 : 0.15, Math.sin(a)).normalize();
     const face = d.clone().addScaledVector(c.out, 0.4).normalize();
-    const cs = (under ? 0.42 : 0.5) + rng() * 0.3;
+    const cs = (under ? 0.52 : 0.58) + rng() * 0.3;
     const col = c.color.clone().lerp(CARD_TINT, 0.15);
     if (under) col.multiplyScalar(0.94);
     list.push({ p, face, roll: (rng() - 0.5) * 2.4, s: cs * Math.min(1.2, t.scale), cell: pickCell(rng(), 0.3), color: col, out: c.out, sway: c.sway * 1.2 });

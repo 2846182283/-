@@ -230,7 +230,7 @@ function paintCommon(add, names) {
       T(c, b, x + 8, 48, 128, 18, { font: G, color: '#555' });
     });
   });
-  // bicycle-parking wall plate (blue, arrow toward the forecourt)
+  // bicycle-parking wall plate (blue; arrow points right = toward the forecourt when seen from the plaza)
   add('kBike', 128, 160, (c, w, h) => {
     fill(c, w, h, '#2d6fb8');
     c.fillStyle = '#fff'; roundRect(c, 6, 6, w - 12, h - 12, 10); c.fill();

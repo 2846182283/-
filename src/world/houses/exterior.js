@@ -360,9 +360,17 @@ function laneFront(B, P, D) {
   const f = P.entry.facade;
   const doorC = f.toLocal((P.entry.u0 + P.entry.u1) / 2, 0)[0];
   const doorZ = f.toLocal(0, 0)[1];
-  // entrance step
+  // entrance step, a slab canopy with a warm lamp beside the door
   const g = P.gy(doorC, doorZ + 0.3);
   B.box('solid', doorC - 0.6, g - 0.2, doorZ, doorC + 0.6, FOUND - 0.2, doorZ + 0.4, shade(P.found, 0.04), { skip: 'yz' });
+  const e = P.entry;
+  B.push(facadeMatrix(f));
+  const cy = e.y1 + 0.28;
+  B.box('solid', e.u0 - 0.3, cy, 0, e.u1 + 0.3, cy + 0.09, 0.7, P.trim === '#5b4332' ? '#e9e6de' : P.trim, { skip: 'z', colors: { y: P.soffit } });
+  B.shadowBox(e.u0 - 0.3, cy, 0.01, e.u1 + 0.3, cy + 0.09, 0.7);
+  const lu = e.u0 > f.L - e.u1 ? e.u0 - 0.25 : e.u1 + 0.25;
+  B.box('unlit', lu - 0.05, e.y1 - 0.35, 0, lu + 0.05, e.y1 - 0.18, 0.09, '#ffe2a8', { skip: 'z' });
+  B.pop();
   const type = pickW(r, [['block', 4], ['hedge', 2.5], ['mesh', 1.2], ['none', 2]]);
   if (type !== 'none') {
     const H = type === 'block' ? r.pick([0.7, 0.9, 1.0]) : type === 'hedge' ? r.range(0.75, 0.95) : 0.85;

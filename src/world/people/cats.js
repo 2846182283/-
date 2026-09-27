@@ -1,7 +1,8 @@
 /**
  * people/cats — neighbourhood cats: a white cat sitting on a garden wall along
- * the main street, a calico loafing by the little shrine and a black cat
- * sitting beside it.  Each cat is one SkinnedMesh (body / head / ears / tail
+ * the main street, a calico loafing by the little shrine, a black cat
+ * sitting beside it and a second calico on a back-garden wall below the levee.
+ * (buildCat also makes the levee grandpa's shiba, see outskirts.js.)  Each cat is one SkinnedMesh (body / head / ears / tail
  * chain bones); idle animation sways the tail, turns the head now and then
  * and twitches an ear.
  *
@@ -20,10 +21,13 @@ const CATS = {
   white: { fur: '#f4f1ec', shade: '#e3dcd6', eye: '#8fc0d8', nose: '#eaa0a8', line: '#6a5a5e', inner: '#f2c4c8' },
   calico: { fur: '#f5f0e8', shade: '#e6ddd2', eye: '#d9b04a', nose: '#e39aa0', inner: '#f2c4c8', patches: ['#d9965a', '#3a3438'], muzzle: null },
   black: { fur: '#2e2c33', shade: '#2e2c33', eye: '#e6c14a', nose: '#4a3a40', line: '#1a181c', inner: '#5a4a52' },
+  // shiba inu (the levee dog-walker's companion): built by the same cat builder, scaled up,
+  // with a longer cream muzzle, a curled tail and round dark eyes ('dog' in paintCatFace)
+  shiba: { fur: '#d99a62', shade: '#f3e6d2', eye: '#3a2a26', nose: '#2e2628', line: '#4a3226', inner: '#f3e2cf', dog: true, brows: '#f6ead8', muzzle: '#f6ead8' },
 };
 
-/** Build one cat. pose: 'sit' | 'loaf'. */
-function buildCat(id, kind, pose, shared) {
+/** Build one cat (or the shiba). pose: 'sit' | 'loaf'. */
+export function buildCat(id, kind, pose, shared) {
   const c = CATS[kind];
   const sit = pose === 'sit';
   const HR = 0.056; // head radius
@@ -74,7 +78,15 @@ function buildCat(id, kind, pose, shared) {
       return faceRect.map(0.5 + lx / (2 * HR), (ly / HR - FACE.vBottom) / FACE.vSpan);
     },
   });
-  RM.add(ellipsoid(HR * 0.5, HR * 0.32, HR * 0.35, 10, 6), { m: M(head.x, head.y - HR * 0.35, head.z + HR * 0.72), bone: 'cHead', color: kind === 'black' ? c.fur : '#fbf8f4' });
+  if (c.dog) {
+    // longer snout with a dark nose tip and a cream underside (urajiro)
+    RM.add(ellipsoid(HR * 0.5, HR * 0.4, HR * 0.62, 12, 8, (p) => { if (p.z > 0) p.y -= p.z * 0.25; }), { m: M(head.x, head.y - HR * 0.36, head.z + HR * 0.85), bone: 'cHead', color: (p) => (p.y < head.y - HR * 0.42 ? c.shade : c.fur) });
+    RM.add(ellipsoid(HR * 0.17, HR * 0.12, HR * 0.12, 8, 6), { m: M(head.x, head.y - HR * 0.3, head.z + HR * 1.45), bone: 'cHead', color: c.nose });
+    // cream chest bib
+    RM.add(ellipsoid(0.05, 0.075, 0.03, 10, 8), { m: M(0, 0.155, 0.075, -0.3), bone: 'root', color: c.shade });
+  } else {
+    RM.add(ellipsoid(HR * 0.5, HR * 0.32, HR * 0.35, 10, 6), { m: M(head.x, head.y - HR * 0.35, head.z + HR * 0.72), bone: 'cHead', color: kind === 'black' ? c.fur : '#fbf8f4' });
+  }
   // ears: flattened cones with a pink inner face
   for (const [sd, sx] of [['L', 1], ['R', -1]]) {
     const ear = new THREE.ConeGeometry(0.024, 0.045, 4, 1);
@@ -87,18 +99,20 @@ function buildCat(id, kind, pose, shared) {
     RM.add(inner, { m: M(sx * 0.034, head.y + 0.054, head.z + 0.004, -0.1, sx * 0.15, -sx * 0.32), bone: `ear${sd}`, color: c.inner });
   }
   // whiskers (detail mesh, no outline)
-  for (const sx of [-1, 1]) for (let k = 0; k < 3; k++) {
+  if (!c.dog) for (const sx of [-1, 1]) for (let k = 0; k < 3; k++) {
     const a = V3(sx * 0.02, head.y - 0.02 - k * 0.005, head.z + HR * 0.85);
     const b = V3(sx * 0.09, head.y - 0.012 - k * 0.018, head.z + HR * 0.6);
     D.add(strand([a, b], { width: () => 0.0012, thick: () => 0.0008, out: head, seg: 3 }), { bone: 'cHead', color: kind === 'black' ? '#8a8490' : '#ffffff' });
   }
   // tail chain
-  const tp = sit
+  const tp = c.dog
+    ? [V3(0, 0.05, -0.13), V3(0, 0.1, -0.17), V3(0.02, 0.16, -0.16), V3(0.045, 0.19, -0.1), V3(0.05, 0.165, -0.06)] // curled up over the back
+    : sit
     ? [V3(0, 0.035, -0.14), V3(0.06, 0.02, -0.15), V3(0.11, 0.016, -0.08), V3(0.125, 0.016, 0.0), V3(0.1, 0.018, 0.07), V3(0.06, 0.02, 0.1)]
     : [V3(0, 0.05, -0.2), V3(0.06, 0.03, -0.26), V3(0.11, 0.022, -0.2), V3(0.12, 0.02, -0.08), V3(0.11, 0.02, 0.02)];
-  RM.add(strand(tp, { width: (t) => 0.02 * (1 - t * 0.35), thick: (t) => 0.018 * (1 - t * 0.35), out: V3(0, 0.3, 0), seg: 8 }), {
+  RM.add(strand(tp, { width: (t) => (c.dog ? 0.026 : 0.02) * (1 - t * 0.35), thick: (t) => (c.dog ? 0.024 : 0.018) * (1 - t * 0.35), out: c.dog ? V3(0.2, 0.1, -0.1) : V3(0, 0.3, 0), seg: 8 }), {
     bone: (p, t) => { const a = THREE.MathUtils.smoothstep(t, 0.15, 0.4), b = THREE.MathUtils.smoothstep(t, 0.5, 0.8); return [['tail1', 1 - a], ['tail2', a * (1 - b)], ['tail3', a * b]]; },
-    color: (p, n, t) => (kind === 'calico' && t > 0.5 ? c.patches[t > 0.8 ? 1 : 0] : kind === 'white' || kind === 'black' ? c.fur : c.fur),
+    color: (p, n, t) => (kind === 'calico' && t > 0.5 ? c.patches[t > 0.8 ? 1 : 0] : c.dog && t > 0.6 ? c.shade : c.fur),
   });
   const ch = finishRig(RM, D, rig, P, shared, `cat_${id}`);
   return ch;
@@ -224,6 +238,33 @@ export function buildCats(ctx, shared, cast) {
     cats.push({ ch: buildCat('black', 'black', 'sit', shared), ...spot, seed: 3 });
   }
 
+  // ---- calico on a back-garden block wall, seen from the levee path ------------------------
+  // houses/rear.js closes the north-row back yards with a ~1.0-1.2 m boundary run just
+  // south of the levee foot; find a narrow, level top there (no perch -> no cat).
+  {
+    const zc = layout.TERRAIN.leveeSouthFoot + 1.4;
+    const reg = { x0: -46, x1: 8, z0: zc - 1.2, z1: zc + 1.2 };
+    const probe = makeRegionProbe(roots, reg, 0.4);
+    let best = null;
+    for (let x = reg.x0 + 0.5; x <= reg.x1 - 0.5; x += 0.3) {
+      for (let z = reg.z0 + 0.25; z <= reg.z1 - 0.25; z += 0.05) {
+        const g = groundY(x, z);
+        const h = probe(x, z, g + 3);
+        if (!h || h.ny < 0.95) continue;
+        const hh = h.y - g;
+        if (hh < 0.8 || hh > 1.35) continue;
+        // a wall running along x: lower on both z sides, level for +-0.18 m along x
+        const hn = probe(x, z - 0.22, g + 3), hs = probe(x, z + 0.22, g + 3);
+        if ((hn && hn.y > h.y - 0.3) || (hs && hs.y > h.y - 0.3)) continue;
+        const ha = probe(x + 0.18, z, g + 3), hb = probe(x - 0.18, z, g + 3);
+        if (!ha || !hb || Math.abs(ha.y - h.y) > 0.02 || Math.abs(hb.y - h.y) > 0.02) continue;
+        const score = Math.abs(x + 28);
+        if (!best || score < best.score) best = { x, y: h.y, z, rotY: Math.PI + 0.45, score };
+      }
+    }
+    if (best) cats.push({ ch: buildCat('calico2', 'calico', 'sit', shared), ...best, seed: 4 });
+  }
+
   if (ctx.params?.get('peopleDebug')) {
     for (const c of cats) console.warn(`[people] cat ${c.ch.object.name} at ${c.x.toFixed(2)},${c.y.toFixed(2)},${c.z.toFixed(2)}`);
   }
@@ -235,8 +276,13 @@ export function buildCats(ctx, shared, cast) {
     group.add(c.ch.object);
   }
 
+  const cam = ctx.camera.position;
   ctx.onUpdate((dt, t) => {
     for (const c of cats) {
+      // cats are tiny: hide (and stop animating) them beyond 50 m
+      const dx = c.x - cam.x, dz = c.z - cam.z;
+      c.ch.object.visible = dx * dx + dz * dz < 2500;
+      if (!c.ch.object.visible) continue;
       const p = c.ch.poser, s = c.seed;
       // tail: slow sway + an occasional tip flick
       const flick = Math.max(0, Math.sin(t * 0.7 + s * 2)) ** 8;

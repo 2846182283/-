@@ -25,9 +25,11 @@ const C = RAIL.catenary;
 // clear the canopy columns, vending machine V2, benches and the 駅名標, and get
 // a flashing collar where they pass through the canopy decks (station.js).
 // ---------------------------------------------------------------------------
+// z sits on the canopy-column line, behind station.js's linear guide blocks
+// (P1: 2.75..3.05 m from the edge, z -25.65..-25.35; P2: 2.22..2.5 m, z -38.02..-38.3).
 const PLATFORM_MAST = {
-  zS: -25.3, // P1 back half (P1: edge -28.4 .. back -24.0)
-  zN: -38.25, // P2 back half (P2: edge -35.8 .. back -39.6)
+  zS: -24.85, // P1 back half (P1: edge -28.4 .. back -24.0); plinth z -25.15..-24.55
+  zN: -38.85, // P2 back half (P2: edge -35.8 .. back -39.6); plinth z -39.15..-38.55
   /** x nudges for the planned mast positions that fall on the platforms */
   shift: { '-25': -0.4, '20': 1.2 },
 };

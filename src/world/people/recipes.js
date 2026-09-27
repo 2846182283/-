@@ -9,7 +9,7 @@ import { torsoShell } from './body.js';
 import { satchel, ecoBag, plasticBag, briefcase, backpack, crossBag, book, phone, sailorScarf, glasses } from './accessories.js';
 import { bicycle } from './bicycle.js';
 
-export const SKIN = { fair: '#fbe3d3', warm: '#f8dcc9', tan: '#f0cfb8', elder: '#f1d6c6' };
+export const SKIN = { fair: '#f5d4c1', warm: '#f1cbb5', tan: '#e6bea3', elder: '#eacab8' }; // warm enough that hands never read as white gloves in sun
 export const HAIR = { black: '#2e2b35', dark: '#3f3136', brown: '#6b4a3a', chestnut: '#86573f', grey: '#bdb8c2', greyDark: '#8d8a92' };
 const NAVY = '#2c3657';
 
@@ -87,7 +87,7 @@ export function recipes() {
       legs: tights('#3b3a45'),
       hands: { R: 'grip', L: 'grip' },
       extras: (kit) => {
-        const b = bicycle(kit.RM, kit.D, bikeM, 'root', { color: '#b7d3cb', bagColor: '#3b2f2c' });
+        const b = bicycle(kit.RM, kit.D, bikeM, 'root', { color: '#7fbfae', bagColor: '#3b2f2c' });
         out.grips = b.grips;
         out.saddle = b.saddle;
       },
@@ -296,6 +296,70 @@ export function recipes() {
     shoes: { color: '#f3efe6', sole: '#e8a0b0', kind: 'sneaker' },
     hem: (P) => ({ hemY: P.crotchY - 0.02, flare: 0.04, gap: 0.02, lining: '#9fb6ca' }),
     extras: (kit) => crossBag(kit.RM, kit.P, { color: '#f1c95a', side: 1, w: 0.05, h: 0.1, d: 0.12, strap: 0.01 }),
+  };
+
+  // ---- outskirts (people/outskirts.js): the levee and the southern main street ----------------
+
+  // 在前景樱花下用手机拍花的女生 — blazer uniform, grey pleated skirt, phone raised in both hands
+  R.photoGirl = {
+    id: 'photoGirl', kind: 'girl', H: 1.57, skin: SKIN.warm,
+    face: { iris: '#5a4650', lashes: true, blush: 0.45, style: 'open', mouth: 'smile', brow: '#3e3034', lookY: 0.35 },
+    hair: { style: 'long', color: '#3a2c2e', bangs: 'side', flut: 0.035 },
+    garment: { kind: 'blazer', base: '#3a4560', shirt: '#f4f4f2', tie: '#a4505e', tieStripe: '#e3c8cc', button: '#c9b36a', bulk: 0.01 },
+    sleeve: (P) => ({ color: '#3a4560', end: 'wrist', bulk: 0.009, cuff: [[P.wristY - 0.004, P.wristY + 0.004, '#f4f4f2']] }),
+    hands: { R: 'grip', L: 'grip' },
+    legs: (P) => sockLegs(SKIN.warm, '#2c3244', P.kneeY - 0.04),
+    shoes: { color: '#3f302b', sole: '#2a2224', kind: 'loafer' },
+    skirt: (P) => ({ color: '#6d7282', hemY: P.kneeY + 0.06, flare: 1.28, pleats: 16, pleatAmp: 0.08, flut: 0.025 }),
+    hem: (P) => ({ hemY: P.hipsY - 0.05, flare: 0.012 }),
+    // the phone rides the chest, raised to eye level ~0.3 m in front of her face
+    bones: (P) => [['phone', 'chest', 0, P.cy - 0.03, 0.3]],
+    extras: (kit) => {
+      crossBag(kit.RM, kit.P, { color: '#2f3444', side: 1, w: 0.09, h: 0.24, d: 0.32 });
+      phone(kit.RM, kit.D, 'phone', kit.rig.rest.phone, kit.rects.phone, { rx: -0.25, ry: Math.PI, color: '#e6d9e0' });
+    },
+  };
+
+  // 杂货店门口挑东西的女士 — lilac cardigan, sage long skirt, cream canvas tote
+  R.shopper = {
+    id: 'shopper', kind: 'woman', H: 1.6, skin: SKIN.fair,
+    face: { iris: '#4e4046', lashes: true, blush: 0.35, style: 'soft', mouth: 'smile', brow: '#4a3432', lookX: 0.3 },
+    hair: { style: 'bob', color: HAIR.dark, bangs: 'side', flut: 0.015 },
+    garment: { kind: 'cardigan', base: '#b9aec4', shirt: '#f3efe6', button: '#efe6d2', ribbon: '#8a6a7a', bulk: 0.012 },
+    sleeve: (P) => ({ color: '#b9aec4', end: 'wrist', bulk: 0.01, cuff: [[P.wristY, P.wristY + 0.03, '#a89cb4']] }),
+    hands: { L: 'grip', R: 'relaxed' },
+    legs: (P) => sockLegs(SKIN.fair, '#e8e2d6', P.ankleY + 0.05),
+    shoes: { color: '#8a6a58', sole: '#4a3a32', kind: 'pump' },
+    hem: (P) => ({ hemY: P.hipsY - 0.05, flare: 0.012, gap: 0.016, lining: '#9a8fa8' }),
+    skirt: (P) => ({ color: '#8a9a90', hemY: P.ankleY + 0.2, flare: 1.3, flut: 0.03, pleats: 18, pleatAmp: 0.03, topY: P.waistY - 0.02 }),
+    extras: (kit) => ecoBag(kit.RM, kit.rig.rest, 'hand_L', null, { handle: '#a08c70', w: 0.28, h: 0.3 }),
+  };
+
+  // 河堤上遛柴犬的老爷爷 — bucket hat, blue-grey sweater, the leash in his right hand
+  R.dogWalker = {
+    id: 'dogWalker', kind: 'elderM', H: 1.64, skin: SKIN.elder,
+    face: { iris: '#4a3a3a', elder: true, man: true, style: 'soft', mouth: 'smile', brow: '#c2bcc0', eyeW: 0.25, eyeH: 0.22, lookY: -0.3 },
+    head: { jaw: 0.03 },
+    hair: { style: 'short', color: HAIR.grey, bangs: 'none', sideLocks: false, flut: 0.004 },
+    hat: { kind: 'bucket', color: '#a3ad96', band: '#7d876f' },
+    garment: { kind: 'knit', base: '#8492a6', bulk: 0.014 },
+    sleeve: (P) => ({ color: '#8492a6', end: 'wrist', bulk: 0.012, cuff: [[P.wristY, P.wristY + 0.03, '#76849a']] }),
+    hands: { R: 'fist', L: 'fist' },
+    legs: (P) => trousers('#6f6a60', P),
+    shoes: { color: '#e9e6df', sole: '#9a948a', kind: 'sneaker' },
+  };
+
+  // 坐在河堤草坡上的女生 — sailor uniform, knees hugged, satchel standing on the grass beside her
+  R.slopeGirl = {
+    id: 'slopeGirl',
+    ...sailor({
+      H: 1.54, hair: { style: 'long', color: '#5a3e36', bangs: 'full', flut: 0.045 },
+      eyes: 'soft', mouth: 'smile', blush: 0.5,
+      legs: (P) => sockLegs(SKIN.fair, NAVY, P.kneeY - 0.06),
+      hands: { R: 'relaxed', L: 'relaxed' },
+      bones: (P) => [['bag', 'root', 0.33, P.hipJ + 0.29, 0.02]],
+      extras: (kit) => satchel(kit.RM, kit.rig.rest, 'bag', { color: '#3a2e2b', charm: '#a8c8e8', ry: 0.3 }),
+    }),
   };
   return R;
 }

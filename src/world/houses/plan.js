@@ -240,7 +240,7 @@ export function makePlan(lot) {
   plan.blockColor = r.pick(['#d6d3cc', '#cfcbc3', '#dcd6ca', '#c9c6be']);
   plan.latticeColor = r.pick(['#8a6446', '#6d5040', '#a07a55', '#5b4332']);
   plan.meshColor = r.pick(['#4d6b55', '#6b7075', '#5a4f48']);
-  plan.hedgeColor = r.pick(['#5f8a4f', '#4f7a48', '#6b9454']);
+  plan.hedgeColor = r.pick(['#6a9656', '#5d8a50', '#76a05c']);
   plan.postColor = r() < 0.5 ? plan.zones[0].color : r.pick(['#e9e4d8', '#d9d3c6', '#c9b9a3']);
   plan.openwork = r() < 0.3;
   if (plan.frontEave) plan.entry.canopy = 'eave';

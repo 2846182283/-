@@ -14,7 +14,7 @@
  *
  * Code lives in src/world/sakura/*.js; this file wires it together.
  * Level of detail / culling: sakura/lod.js (per-cell meshes + a dynamic near-tree layer).
- * URL debug: ?sakura=noPetals,noTrees,noPits,noGround,nearOnly,stats (dev helpers).
+ * URL debug: ?sakura=noPetals,noTrees,noPits,noGround,nearOnly,stats,noNear,noMid,noCells (dev helpers).
  */
 import * as THREE from 'three';
 import { barkTexture, floralTexture, blossomAtlas } from './sakura/textures.js';
@@ -50,7 +50,7 @@ export default async function build(ctx) {
 
   // ---- trees ----
   const trees = buildTrees(ctx, { onlyNear: dbg.includes('nearOnly') });
-  const lod = buildCanopyLod(ctx, trees, mats);
+  const lod = buildCanopyLod(ctx, trees, mats, dbg);
   if (!dbg.includes('noTrees')) {
     root.add(lod.group);
     ctx.onUpdate(() => lod.update(ctx.camera.position));
@@ -62,10 +62,48 @@ export default async function build(ctx) {
   if (!dbg.includes('noGround')) root.add(gp.ground, gp.rafts);
   if (!dbg.includes('noPetals')) root.add(buildFallingPetals(ctx, trees.infos));
 
+  // distance culling for small instanced details (fallen petals, grass): userData.cullDist
+  const culled = [];
+  root.traverse((o) => {
+    if (!o.userData.cullDist) return;
+    o.updateWorldMatrix(true, false);
+    if (!o.boundingSphere) o.computeBoundingSphere();
+    culled.push({ o, s: o.boundingSphere.clone().applyMatrix4(o.matrixWorld), max: o.userData.cullDist });
+  });
+  ctx.onUpdate(() => {
+    const cam = ctx.camera.position;
+    for (const c of culled) c.o.visible = cam.distanceTo(c.s.center) - c.s.radius < c.max;
+  });
+
   root.userData.stats = { trees: trees.infos.length, ...lod.stats, groundPetals: gp.count };
   if (ctx.params.has('shot')) console.info('[sakura]', JSON.stringify(root.userData.stats));
-  if (dbg.includes('stats')) logMeshStats(root);
+  if (dbg.includes('stats')) {
+    logMeshStats(root);
+    let frame = 0;
+    ctx.onUpdate(() => { if (++frame === 4) logMainPass(root, ctx.camera); });
+  }
   return root;
+}
+
+/** Dev helper: estimated main-pass draw calls / triangles of this module for the current view. */
+function logMainPass(root, camera) {
+  const frustum = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+  const sph = new THREE.Sphere();
+  let calls = 0, tris = 0, outl = 0, cast = 0;
+  root.traverseVisible((o) => {
+    if (!o.isMesh) return;
+    if (o.frustumCulled) {
+      if (o.isInstancedMesh) { if (!o.boundingSphere) o.computeBoundingSphere(); sph.copy(o.boundingSphere).applyMatrix4(o.matrixWorld); } else { if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere(); sph.copy(o.geometry.boundingSphere).applyMatrix4(o.matrixWorld); }
+      if (!frustum.intersectsSphere(sph)) return;
+    }
+    const g = o.geometry;
+    const t = ((g.index ? g.index.count : g.attributes.position.count) / 3) * (o.isInstancedMesh ? o.count : 1);
+    calls++;
+    tris += t;
+    if (o.layers.isEnabled(1)) outl += t;
+    if (o.castShadow) cast += t;
+  });
+  console.warn(`[sakura main pass] calls ${calls}, tris ${Math.round(tris / 1000)}k (outlined ${Math.round(outl / 1000)}k, casters in view ${Math.round(cast / 1000)}k)`);
 }
 
 /** Dev helper (?sakura=stats): triangles per mesh at full instance count, as a console warning. */

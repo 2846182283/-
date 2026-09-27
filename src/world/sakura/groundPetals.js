@@ -66,6 +66,9 @@ function petalLift(shader) {
     #include <opaque_fragment>`);
 }
 
+/** Fallen-petal chunks further than this (m) from the camera are not drawn (see sakura.js). */
+const PETAL_DIST = 70;
+
 /** Box-Muller gaussian. */
 function gauss(rnd) {
   const u = Math.max(1e-6, rnd()), v = rnd();
@@ -299,10 +302,11 @@ export function buildGroundPetals(ctx, infos) {
   // ---- meshes: split by area so each can be frustum-culled ----
   const mat = toon.mat('#ffffff', { vertexColors: true, side: THREE.DoubleSide, polygonOffset: 2, onShaderKey: 'sakura-petal-lift', onShader: petalLift, name: 'sakura_ground_petal' });
   const geo = petalGeometry();
-  // street / station / levee, the long levee strip cut into 90 m runs along x
+  // chunks (street in 60 m bands, station area / levee in 45 / 90 m runs) so each can be
+  // frustum-culled and dropped beyond PETAL_DIST, where a 5 cm petal is well under a pixel
   const areas = {};
   for (const it of items) {
-    const key = it.z > 9 ? 'street' : it.z > -52 ? 'station' : `levee${Math.floor(it.x / 90)}`;
+    const key = it.z > 9 ? `street${Math.floor(it.z / 60)}` : it.z > -52 ? `station${Math.floor(it.x / 45)}` : `levee${Math.floor(it.x / 90)}`;
     (areas[key] ||= []).push(it);
   }
   const group = new THREE.Group();
@@ -311,6 +315,7 @@ export function buildGroundPetals(ctx, infos) {
     if (!list.length) continue;
     const im = ctx.geom.instanced(geo, mat, list, { castShadow: false, noOutline: true });
     im.name = `sakura_ground_petals_${name}`;
+    im.userData.cullDist = PETAL_DIST;
     group.add(im);
   }
   if (drift.length) {
@@ -378,6 +383,7 @@ function buildRafts(ctx, rnd, cols) {
     im.boundingSphere.radius += PERIOD / 2 + 1;
     im.frustumCulled = true;
     im.name = `sakura_river_rafts_${k}`;
+    im.userData.cullDist = PETAL_DIST + 25; // rafts read as pink streaks a little further out
     group.add(im);
   });
   return group;

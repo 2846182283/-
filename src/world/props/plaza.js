@@ -469,7 +469,7 @@ function longBed(kit, rng, ix, iz, sy, bi) {
     shrubs.push([x, z, r + 0.08]);
   }
   const free = (x, z) => shrubs.every(([sx, sz, r]) => Math.hypot(x - sx, z - sz) > r);
-  groundCover(kit, rng, -ix, ix, -iz, iz, sy, Math.round(ix * 2 * 9));
+  groundCover(kit, rng, -ix, ix, -iz, iz, sy, Math.round(ix * 2 * 24));
 
   // tulips: three staggered rows, colour drifts shared across the rows but with ragged edges
   const colourAt = drifts(rng, -ix, ix, TULIP);
@@ -504,7 +504,7 @@ function longBed(kit, rng, ix, iz, sy, bi) {
 /** Narrow stone-edged bed along z: shrubs down the middle, pansy / daisy edges. */
 function narrowBed(kit, rng, ix, iz, sy) {
   for (let z = -iz + 0.3; z < iz - 0.2; z += 0.9) shrub(kit, (rng() - 0.5) * 0.15, sy, z, 0.26 + rng() * 0.06, rng, rng() < 0.5 ? '#fbf6ee' : null);
-  groundCover(kit, rng, -ix, ix, -iz, iz, sy, Math.round(iz * 2 * 6));
+  groundCover(kit, rng, -ix, ix, -iz, iz, sy, Math.round(iz * 2 * 12));
   const pansyAt = drifts(rng, -iz, iz, PANSY.map((p) => [p, 1]));
   for (let z = -iz + 0.06; z < iz; z += 0.12 * (0.85 + rng() * 0.3)) {
     pansy(kit, -ix + 0.07 + (rng() - 0.5) * 0.04, sy, z, pansyAt(z), rng, -Math.PI / 2);

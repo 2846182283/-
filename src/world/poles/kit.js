@@ -4,8 +4,10 @@
  * Draw-call strategy: every static part of every pole, sign and mirror is
  * transformed to world space and dropped into a bucket (material + outline +
  * shadow flags).  Solid colours are baked as vertex colours, textured parts
- * use regions of one canvas atlas, all wires share one tube mesh — so the whole
- * module ends up as ~10 merged meshes (+2 instanced meshes for the sparrows).
+ * use regions of one canvas atlas, all wires share one tube material.  Each
+ * bucket is further split into a handful of coarse street regions (see
+ * regionOf) so views looking away from part of the network can frustum-cull
+ * it: ~8 regions x <=8 buckets, of which a typical view draws 10-30 meshes.
  */
 import * as THREE from 'three';
 
@@ -129,6 +131,26 @@ export function updateWireWidth(camera, renderer, size) {
   WIRE_UNIFORMS.wirePx.value = pxAngle * 0.9;
 }
 
+/**
+ * Coarse culling region of a world point: the north line (W / E of the
+ * station), the station-front junction, the station-front road west / east,
+ * and three stretches of the main street.  Boundaries sit between poles so a
+ * pole's parts mostly land in one region.
+ */
+export function regionOf(x, z) {
+  if (z < -30) return x < -25 ? 'NW' : 'NE';
+  if (z > 130) return 'M2';
+  if (z > 58) return 'M1';
+  if (x < -35) return 'W';
+  if (x > 40) return 'E';
+  return z > 30 ? 'M0' : 'C';
+}
+
+const _box = new THREE.Box3();
+const _ctr = new THREE.Vector3();
+const SMALL = 0.1; // parts smaller than this (m) skip the outline + shadow pass
+const DEMOTE = { vc: 'vcS', metal: 'metalS' };
+
 export function createKit(ctx, atlas) {
   const { toon } = ctx;
   const M = {
@@ -154,7 +176,17 @@ export function createKit(ctx, atlas) {
     glow: { mat: M.glow, noOutline: true, cast: false, vc: false },
     wire: { mat: M.wire, noOutline: true, cast: false, vc: false, raw: true },
   };
-  const geoms = Object.fromEntries(Object.keys(defs).map((k) => [k, []]));
+  // bucket -> region -> [geometry]
+  const geoms = Object.fromEntries(Object.keys(defs).map((k) => [k, new Map()]));
+  /** File a world-space geometry under its bucket + region (by bbox centre). */
+  const file = (bucket, g) => {
+    g.computeBoundingBox();
+    _box.copy(g.boundingBox).getCenter(_ctr);
+    const reg = regionOf(_ctr.x, _ctr.z);
+    const m = geoms[bucket];
+    if (!m.has(reg)) m.set(reg, []);
+    m.get(reg).push(g);
+  };
   // prototype cache: identical small parts (bolts, insulators...) are generated once and cloned
   const protos = new Map();
 
@@ -164,12 +196,18 @@ export function createKit(ctx, atlas) {
     R: atlas.R,
     /** Add a geometry (consumed) to a bucket with an optional colour and world matrix. */
     add(bucket, g, color = '#ffffff', m = null) {
-      const d = defs[bucket];
-      if (!d) throw new Error(`poles: unknown bucket ${bucket}`);
+      if (!defs[bucket]) throw new Error(`poles: unknown bucket ${bucket}`);
       if (m) g.applyMatrix4(m);
+      // tiny outlined parts (bolts, clamps, lugs) would only become black specks in the outline pass
+      if (DEMOTE[bucket]) {
+        g.computeBoundingBox();
+        _box.copy(g.boundingBox).getSize(_ctr);
+        if (Math.max(_ctr.x, _ctr.y, _ctr.z) < SMALL) bucket = DEMOTE[bucket];
+      }
+      const d = defs[bucket];
       if (d.vc) paint(g, color);
       else if (g.attributes.color) g.deleteAttribute('color');
-      geoms[bucket].push(g);
+      file(bucket, g);
       return g;
     },
     /** Cached prototype geometry, cloned on each call. */
@@ -179,7 +217,7 @@ export function createKit(ctx, atlas) {
       return g.clone();
     },
     /** Add a finished world-space wire geometry (from wireTube). */
-    addWire(g) { geoms.wire.push(g); },
+    addWire(g) { file('wire', g); },
     /**
      * A local frame (world matrix F) for building one object.  Parts are
      * given in local coordinates; `f.m(...)` returns F * local.
@@ -206,25 +244,26 @@ export function createKit(ctx, atlas) {
       };
       return f;
     },
-    /** Merge every bucket into meshes under a new group. */
+    /** Merge every bucket, region by region, into meshes under a new group. */
     finish(name) {
       const group = new THREE.Group();
       group.name = name;
       let tris = 0;
       for (const [k, d] of Object.entries(defs)) {
-        const list = geoms[k];
-        if (!list.length) continue;
-        const merged = ctx.geom.merge(list, d.vc ? ['color'] : []);
-        merged.computeBoundingSphere();
-        const mesh = new THREE.Mesh(merged, d.mat);
-        mesh.name = `${name}:${k}`;
-        mesh.castShadow = d.cast;
-        mesh.receiveShadow = !d.raw;
-        if (d.noOutline) mesh.userData.noOutline = true;
-        mesh.matrixAutoUpdate = false;
-        group.add(mesh);
-        tris += (merged.index ? merged.index.count : merged.attributes.position.count) / 3;
-        list.length = 0;
+        for (const [reg, list] of geoms[k]) {
+          const merged = ctx.geom.merge(list, d.vc ? ['color'] : []);
+          merged.computeBoundingSphere();
+          if (d.raw) merged.boundingSphere.radius += 0.1; // min-width wire inflation
+          const mesh = new THREE.Mesh(merged, d.mat);
+          mesh.name = `${name}:${k}:${reg}`;
+          mesh.castShadow = d.cast;
+          mesh.receiveShadow = !d.raw;
+          if (d.noOutline) mesh.userData.noOutline = true;
+          mesh.matrixAutoUpdate = false;
+          group.add(mesh);
+          tris += (merged.index ? merged.index.count : merged.attributes.position.count) / 3;
+        }
+        geoms[k].clear();
       }
       group.userData.triangles = tris;
       return group;

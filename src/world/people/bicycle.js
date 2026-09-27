@@ -17,7 +17,7 @@ export function bicycle(RM, D, base, bone, o = {}) {
   const chrome = '#d3d7db';
   const dark = '#34363c';
   const T = (p) => p.clone().applyMatrix4(base);
-  const addTube = (mesh, pts, r, color, radial = 6) => mesh.add(tube(pts.map(T), r, radial), { bone, color });
+  const addTube = (mesh, pts, r, radial, color) => mesh.add(tube(pts.map(T), r, radial), { bone, color }); // (radius, radial segments, colour)
   const addG = (mesh, g, m, color, extra = {}) => mesh.add(g, { m: base.clone().multiply(m), bone, color, ...extra });
   const mt = (x, y, z, rx = 0, ry = 0, rz = 0) => new THREE.Matrix4().compose(V3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz, 'YXZ')), V3(1, 1, 1));
 
@@ -49,21 +49,21 @@ export function bicycle(RM, D, base, bone, o = {}) {
   guard(Rh, -Math.PI * 0.12, Math.PI * 0.72);
 
   // ---- frame --------------------------------------------------------------
-  addTube(RM, [BB, V3(0, 0.3, 0.1), V3(0, 0.42, 0.28), HB], 0.022, 8, frameCol); // low step-through tube
-  addTube(RM, [V3(0, 0.33, -0.02), V3(0, 0.5, 0.2), V3(0, 0.66, 0.36)], 0.014, 6, frameCol); // second mixte tube
-  addTube(RM, [BB, ST], 0.02, 8, frameCol);
-  addTube(RM, [HB, HT], 0.024, 8, frameCol);
+  addTube(RM, [BB, V3(0, 0.3, 0.1), V3(0, 0.42, 0.28), HB], 0.027, 8, frameCol); // low step-through tube
+  addTube(RM, [V3(0, 0.33, -0.02), V3(0, 0.5, 0.2), V3(0, 0.66, 0.36)], 0.022, 6, frameCol); // second mixte tube
+  addTube(RM, [BB, ST], 0.025, 8, frameCol);
+  addTube(RM, [HB, HT], 0.028, 8, frameCol);
   for (const sx of [-0.04, 0.04]) {
-    addTube(RM, [BB.clone().setX(sx * 0.6), Rh.clone().setX(sx)], 0.01, 5, frameCol); // chain stays
-    addTube(RM, [V3(sx * 0.4, 0.68, -0.29), Rh.clone().setX(sx)], 0.01, 5, frameCol); // seat stays
-    addTube(RM, [HB.clone().setX(sx * 0.5), V3(sx, 0.47, 0.5), Fh.clone().setX(sx)], 0.011, 5, frameCol); // fork
+    addTube(RM, [BB.clone().setX(sx * 0.6), Rh.clone().setX(sx)], 0.014, 5, frameCol); // chain stays
+    addTube(RM, [V3(sx * 0.4, 0.68, -0.29), Rh.clone().setX(sx)], 0.013, 5, frameCol); // seat stays
+    addTube(RM, [HB.clone().setX(sx * 0.5), V3(sx, 0.47, 0.5), Fh.clone().setX(sx)], 0.015, 5, frameCol); // fork
   }
   // stem + swept-back handlebar + grips + bell
   const stemTop = V3(0, 0.92, 0.35);
   addTube(RM, [HT, stemTop], 0.014, 6, chrome);
   const barL = [V3(0.26, 0.97, 0.16), V3(0.2, 0.95, 0.27), V3(0.1, 0.93, 0.35), V3(0, 0.925, 0.36)];
   const barR = barL.map((p) => p.clone().setX(-p.x)).reverse();
-  addTube(RM, [...barL, ...barR.slice(1)], 0.011, 6, chrome);
+  addTube(RM, [...barL, ...barR.slice(1)], 0.014, 6, chrome);
   for (const sx of [-1, 1]) {
     const a = V3(sx * 0.26, 0.97, 0.16), b = V3(sx * 0.29, 0.975, 0.06);
     addTube(RM, [a, b], 0.017, 7, '#5a4a40');
@@ -84,7 +84,7 @@ export function bicycle(RM, D, base, bone, o = {}) {
   for (let z = cz0; z >= cz1 - 1e-6; z -= 0.13) addTube(RM, [V3(-0.07, cy, z), V3(0.07, cy, z)], 0.005, 4, chrome);
   addG(RM, rbox(0.05, 0.02, 0.01, 0.004), mt(0, 0.6, -0.97, 0.4), '#d8484a'); // rear reflector
   // chain guard + cranks + pedals
-  addG(RM, rbox(0.012, 0.11, 0.52, 0.02), mt(-0.065, 0.3, -0.33, 0.03), frameCol);
+  addG(RM, rbox(0.012, 0.085, 0.5, 0.02), mt(-0.062, 0.3, -0.33, 0.03), frameCol); // flush with the wheel plane
   addG(RM, cyl(0.085, 0.085, 0.012, 16), mt(-0.058, 0.28, -0.08, 0, 0, Math.PI / 2), '#8e949a');
   for (const sx of [-1, 1]) {
     const pz = sx > 0 ? 0.08 : -0.24;
@@ -103,17 +103,18 @@ export function bicycle(RM, D, base, bone, o = {}) {
   const bw = 0.36, bh = 0.26, bd = 0.28;
   const x0 = -bw / 2, x1 = bw / 2, z0 = bc.z - bd / 2, z1 = bc.z + bd / 2, y0 = bc.y - bh / 2, y1 = bc.y + bh / 2;
   const rim = (y, r) => addTube(RM, [V3(x0, y, z0), V3(x1, y, z0), V3(x1, y, z1), V3(x0, y, z1), V3(x0, y, z0)], r, 4, chrome);
-  rim(y1, 0.007);
-  rim(y0 + 0.01, 0.005);
+  rim(y1, 0.009);
+  rim((y0 + y1) / 2, 0.005);
+  rim(y0 + 0.01, 0.006);
   for (let x = x0; x <= x1 + 1e-6; x += 0.036) {
-    addTube(D, [V3(x, y0, z0), V3(x, y1, z0)], 0.0022, 3, '#c9ccd0');
-    addTube(D, [V3(x, y0, z1), V3(x, y1, z1)], 0.0022, 3, '#c9ccd0');
+    addTube(D, [V3(x, y0, z0), V3(x, y1, z0)], 0.003, 3, '#c9ccd0');
+    addTube(D, [V3(x, y0, z1), V3(x, y1, z1)], 0.003, 3, '#c9ccd0');
   }
   for (let z = z0; z <= z1 + 1e-6; z += 0.036) {
-    addTube(D, [V3(x0, y0, z), V3(x0, y1, z)], 0.0022, 3, '#c9ccd0');
-    addTube(D, [V3(x1, y0, z), V3(x1, y1, z)], 0.0022, 3, '#c9ccd0');
+    addTube(D, [V3(x0, y0, z), V3(x0, y1, z)], 0.003, 3, '#c9ccd0');
+    addTube(D, [V3(x1, y0, z), V3(x1, y1, z)], 0.003, 3, '#c9ccd0');
   }
-  for (let y = y0 + 0.06; y < y1; y += 0.06) addTube(D, [V3(x0, y, z0), V3(x1, y, z0), V3(x1, y, z1), V3(x0, y, z1), V3(x0, y, z0)], 0.0022, 3, '#c9ccd0');
+  for (let y = y0 + 0.06; y < y1; y += 0.06) addTube(D, [V3(x0, y, z0), V3(x1, y, z0), V3(x1, y, z1), V3(x0, y, z1), V3(x0, y, z0)], 0.003, 3, '#c9ccd0');
   addG(RM, rbox(bw, 0.008, bd, 0.003), mt(bc.x, y0, bc.z), '#9aa1a8');
   addTube(RM, [V3(0, y0, z0), V3(0, 0.62, 0.45)], 0.008, 4, chrome); // basket stay
   // school bag lying in the basket

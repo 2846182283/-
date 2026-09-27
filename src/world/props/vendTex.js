@@ -439,7 +439,7 @@ export function makeVendAtlas() {
   ids.forEach((id) => A.region(`head_${id}`, 480, 120, (g, w, h) => header(g, w, h, MACHINES[id])));
   // spare space on the last shelf: the toilet-wall mural (the sign atlas is full)
   A.region('mural', 448, 160, mural);
-  A.region('wallStains', 320, 192, wallStains);
+  A.region('wallStains', 320, 176, wallStains); // last row: height must stay <= 180 px
   const texture = A.finish();
   return { texture, r: (n) => A.r(n) };
 }

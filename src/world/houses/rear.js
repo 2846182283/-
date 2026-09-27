@@ -110,6 +110,7 @@ function shed(B, P, D, cx, z0, gy, w) {
     [[x0 - 0.06, gy + h - 0.01, z1 + 0.08], [x1 + 0.06, gy + h - 0.01, z1 + 0.08], [x1 + 0.06, gy + h - 0.11, z0 - 0.06], [x0 - 0.06, gy + h - 0.11, z0 - 0.06]],
     { top: { kind: 'solid', color: rc }, bottom: { kind: 'solid', color: shade(rc, -0.1) }, sides: [{ kind: 'solid', color: shade(rc, -0.05) }, { kind: 'solid', color: rc }, { kind: 'solid', color: rc }, { kind: 'solid', color: rc }] });
   B.shadowBox(x0, gy, z0, x1, gy + h + 0.05, z1);
+  (P.solids ||= []).push({ x0, x1, z0, z1 });
   // a bucket or watering can beside it
   if (r() < 0.6) {
     const bx = x1 + 0.3, bz = z0 + 0.35;

@@ -291,19 +291,23 @@ export function buildPits(ctx, infos, texs) {
       addFlowers(x, z, null, 7, rnd, R * 0.9);
       ctx.addCollider(x - inf.trunkR * 1.6, x + inf.trunkR * 1.6, z - inf.trunkR * 1.6, z + inf.trunkR * 1.6);
     } else {
-      // ---- natural soil patch ----
+      // ---- natural soil patch (gardens); levee trees on the 土手 shoulders just get grass
+      //      and flowers around the root flare (a flat patch cannot follow the bending slope) ----
       const small = inf.context === 'levee';
       const R = (small ? 0.8 : 0.85) + inf.trunkR * 1.2;
-      const sg = drapedPatch(x, z, R, rnd, groundY, 0.02, 16, 3);
-      const soil = new THREE.Mesh(sg, soilMat);
-      soil.castShadow = false;
-      soil.userData.noOutline = true;
-      root.add(soil);
-      if (!small || Math.abs(x) < 110) {
+      if (!small) {
+        const soil = new THREE.Mesh(drapedPatch(x, z, R, rnd, groundY, 0.02, 16, 3), soilMat);
+        soil.castShadow = false;
+        soil.userData.noOutline = true;
+        root.add(soil);
+      }
+      if (!small) {
         const mm = new THREE.Mesh(drapedPatch(x + (rnd() - 0.5) * R, z + (rnd() - 0.5) * R, 0.25, rnd, groundY, 0.026, 10, 2), mossMat);
         mm.userData.noOutline = true;
         mm.castShadow = false;
         root.add(mm);
+      }
+      if (!small || Math.abs(x) < 110) {
         addTufts(x, z, null, Math.round((small ? (z < -90 ? 10 : 16) : 45) * ctx.lod.density), rnd, { r: R * 1.05 });
         addFlowers(x, z, null, small ? 3 : 6, rnd, R * 1.1);
       }
@@ -316,12 +320,14 @@ export function buildPits(ctx, infos, texs) {
   const baked = geom.bakeStatic(root, { name: 'sakura_pits_static' });
   out.add(baked);
   const grassMat = toon.mat('#ffffff', { vertexColors: true, side: THREE.DoubleSide, name: 'sakura_grass' });
-  // town and levee tufts in separate meshes so each side can be frustum-culled
+  // tufts in 60 m cells: frustum-culled, and not drawn beyond 90 m (sub-pixel blades)
   const tuftGeo = tuftGeometry();
-  for (const [name, list] of [['town', tufts.filter((t) => t.z > -52)], ['levee', tufts.filter((t) => t.z <= -52)]]) {
-    if (!list.length) continue;
+  const tuftCells = {};
+  for (const t of tufts) (tuftCells[`${Math.floor(t.x / 60)},${Math.floor(t.z / 60)}`] ||= []).push(t);
+  for (const [name, list] of Object.entries(tuftCells)) {
     const im = geom.instanced(tuftGeo, grassMat, list, { castShadow: false, noOutline: true });
     im.name = `sakura_grass_tufts_${name}`;
+    im.userData.cullDist = 90;
     out.add(im);
   }
   const flowerMat = toon.mat('#ffffff', { vertexColors: true, side: THREE.DoubleSide, name: 'sakura_wildflower' });

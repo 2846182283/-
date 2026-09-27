@@ -53,7 +53,7 @@ function vnoise(x, y, z) {
  * shape is identical at every detail level, so a finer mound encloses the
  * coarse one that casts its shadow.
  */
-function lump(detail, seed, sx, sy, sz, ox, oy, oz, scallop = 0) {
+function lump(detail, seed, sx, sy, sz, ox, oy, oz, scallop = 0, under = 0.62) {
   let g = new THREE.IcosahedronGeometry(1, detail);
   g.deleteAttribute('normal');
   g.deleteAttribute('uv');
@@ -73,7 +73,7 @@ function lump(detail, seed, sx, sy, sz, ox, oy, oz, scallop = 0) {
       bump += scallop * Math.pow(r2, 1.6);
     }
     x *= bump; z *= bump; y *= bump;
-    y = y < 0 ? y * 0.62 : y * 0.86; // softer underside, domed top
+    y = y < 0 ? y * under : y * 0.86; // softer underside, domed top
     p.setXYZ(i, x * sx + ox, y * sy + oy, z * sz + oz);
   }
   g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
@@ -84,20 +84,39 @@ function lump(detail, seed, sx, sy, sz, ox, oy, oz, scallop = 0) {
 
 /**
  * The clump shape at three detail levels (same silhouette family):
- *   hi   near trees (<~15 m): detail-2 main mound with scalloped rim + detail-1 side mound (400 tris)
- *   lo   the default (and the shadow caster of near trees): detail-1 + detail-0 (100 tris)
+ *   hi   near trees (<~15 m): the mass broken into three overlapping, softly scalloped
+ *        cushions shrunk into a core (the sprig cards + fringe around it carry the
+ *        silhouette, so it reads as blossom clusters, not one pillow), detail 1 each (240 tris)
+ *   lo   the default (and the shadow caster of near trees): detail-1 mound + detail-0 side mound (100 tris)
  *   far  distant cells: detail-0 + detail-0 (40 tris)
  * Local size ~ [-1, 1] horizontally, y ~ [-0.5, 0.8].
  */
 export function clumpGeometry(variant, lod) {
   const rnd = mulberry(variant * 97 + 1);
-  const main = lod === 'hi' ? 2 : lod === 'lo' ? 1 : 0;
-  const parts = [lump(main, variant * 3.1, 0.8, 0.74, 0.8, 0, 0.05, 0, lod === 'hi' ? 0.16 : 0)];
   const a = rnd() * Math.PI * 2;
   const d = 0.5 + rnd() * 0.12;
   const s = 0.52 + rnd() * 0.12;
-  parts.push(lump(lod === 'hi' ? 1 : 0, variant * 3.1 + 1, s, s * 0.9, s, Math.cos(a) * d, -0.08 + rnd() * 0.16, Math.sin(a) * d, lod === 'hi' ? 0.12 : 0));
+  const sub = [Math.cos(a) * d, -0.08 + rnd() * 0.16, Math.sin(a) * d];
+  let parts;
+  if (lod === 'hi') {
+    // three cushions around the lo mound's centre + its side mound, overlapping ~30 %
+    parts = [
+      // (rounder undersides than the lo mound: seen from below they read as cushions, not plates)
+      lump(1, variant * 3.1, 0.6, 0.62, 0.6, -Math.cos(a) * 0.22, 0.14, -Math.sin(a) * 0.22, 0.1, 0.82),
+      lump(1, variant * 3.1 + 5, 0.56, 0.56, 0.56, -Math.cos(a + 2.2) * 0.4, -0.02, -Math.sin(a + 2.2) * 0.4, 0.1, 0.82),
+      lump(1, variant * 3.1 + 1, s * 1.05, s * 0.95, s * 1.05, sub[0], sub[1], sub[2], 0.1, 0.82),
+    ];
+  } else {
+    const det = lod === 'lo' ? 1 : 0;
+    parts = [
+      lump(det, variant * 3.1, 0.8, 0.74, 0.8, 0, 0.05, 0),
+      lump(0, variant * 3.1 + 1, s, s * 0.9, s, sub[0], sub[1], sub[2]),
+    ];
+  }
   const g = fixSeams(mergeParts(parts), parts);
+  // near: the cushions are a shaded core inside the sprig cards, which (with the fringe)
+  // carry the silhouette; full size they read as flat plates when seen from below
+  if (lod === 'hi') g.scale(0.78, 0.78, 0.78);
   g.computeBoundingSphere();
   return g;
 }

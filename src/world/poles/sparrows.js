@@ -79,6 +79,18 @@ function wingGeometry(geom) {
   return geom.merge([paint(a, '#6f4c33'), paint(bar, '#efe6d2')], ['color']);
 }
 
+/** Bounding sphere of all perch points, padded by the longest flight excursion. */
+function staticBounds(perches) {
+  const box = new THREE.Box3();
+  const p = new THREE.Vector3();
+  for (const q of perches) box.expandByPoint(spanPoint(q.span.a, q.span.b, q.span.sag, Math.min(0.95, Math.max(0.05, q.t)), p));
+  const sphere = new THREE.Sphere();
+  if (box.isEmpty()) return sphere;
+  box.getBoundingSphere(sphere);
+  sphere.radius += 14;
+  return sphere;
+}
+
 /**
  * @param {object} ctx
  * @param {Array} perches  [{span, t, facing, flier}] (span from wires.js)
@@ -95,9 +107,13 @@ export function buildSparrows(ctx, perches) {
     m.userData.dynamic = true;
     m.castShadow = false;
     m.receiveShadow = true;
-    m.frustumCulled = false;
     m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   }
+  // static culling sphere covering every perch plus the fliers' loops (fA <= 13 m, fB <= 3 m, fH <= 5 m),
+  // so the per-frame instance updates never need a bounds recompute
+  const bounds = staticBounds(perches);
+  bodies.boundingSphere = bounds;
+  wings.boundingSphere = bounds.clone();
   bodies.name = 'poles:sparrows';
   wings.name = 'poles:sparrowWings';
 

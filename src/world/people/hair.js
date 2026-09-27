@@ -42,10 +42,20 @@ export function buildHair(RM, P, h) {
 
   // ---- cap ----------------------------------------------------------------
   const capR = R * 1.075;
-  const napeY = (h.style === 'short' || h.style === 'elder' ? -0.5 : -0.62) * R;
+  // nape hairline: short cuts stop high; longer styles cover the whole back of the skull
+  // down to the jaw line, so a turned head never shows a bald skin oval from behind
+  const shortCut = h.style === 'short' || h.style === 'elder';
+  const napeY = (shortCut ? -0.5 : -0.62) * R;
+  const napeLow = (shortCut ? -0.5 : -1.0) * R;
+  // follows headGeometry's lower stretch (y * 1.2, tapered jaw) so the shell stays outside the skull
   let cap = ellipsoid(capR, capR, capR, 30, 22, (p) => {
     if (p.z > 0) p.z *= 0.95; else p.z *= 1.07;
-    if (p.y < 0) { const t = -p.y / capR; p.x *= 1 - 0.18 * t * t; }
+    if (p.y < 0) {
+      const t = -p.y / capR;
+      p.x *= 1 - 0.18 * t * t;
+      p.z *= 1 - 0.08 * t;
+      p.y *= 1 + 0.18 * t;
+    }
   });
   cap = clip(cap, (p) => {
     const front = p.z > 0.12 * R;
@@ -54,7 +64,9 @@ export function buildHair(RM, P, h) {
       const hairline = ax > 0.55 ? -0.15 * R : h.bangs === 'none' ? 0.55 * R : 0.42 * R;
       return p.y > hairline;
     }
-    return p.y > napeY - (ax > 0.7 ? 0.05 * R : 0);
+    // behind the ears the hairline drops from the ear line to the nape
+    const k = ss(-p.z / R, -0.12, 0.45);
+    return p.y > napeY + (napeLow - napeY) * k - (ax > 0.7 ? 0.05 * R : 0);
   });
   RM.add(cap, { m: toModel, bone: 'head', color: capColor });
 

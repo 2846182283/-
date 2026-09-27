@@ -1,7 +1,7 @@
 /**
  * World module: people — a small cast of anime townsfolk and three cats.
  *
- * Kept deliberately modest (14 people): each carries a little story —
+ * Kept deliberately modest (18 people spread over the whole town): each carries a little story —
  * the station attendant checking his watch, a girl with her bike waiting at
  * the crossing, a boy choosing a drink, a reader on the platform bench, the
  * café clerk chalking today's menu, a grandmother with a leek in her eco bag,

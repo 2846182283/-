@@ -117,7 +117,8 @@ export default async function build(ctx) {
 /** Walk-mode colliders: world AABB of each (slightly shrunk) block footprint. */
 function addColliders(ctx, lot, P) {
   if (!ctx.addCollider) return;
-  for (const b of P.blocks) {
+  // blocks + solid extras registered by the builders (apartment stair, back-garden sheds)
+  for (const b of [...P.blocks, ...(P.solids || [])]) {
     const pts = [[b.x0 + 0.1, b.z0 + 0.1], [b.x1 - 0.1, b.z0 + 0.1], [b.x1 - 0.1, b.z1 - 0.1], [b.x0 + 0.1, b.z1 - 0.1]].map(([x, z]) => lot.toWorld(x, z));
     const xs = pts.map((p) => p.x), zs = pts.map((p) => p.z);
     ctx.addCollider(Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs));

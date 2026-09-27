@@ -795,8 +795,9 @@ function buildTrees() {
   // levee rows (both edges of the levee-top path), classic hanami tunnel
   for (let x = -190; x <= 190; x += 10.5) {
     const j = ((hashString(`lv${x}`) % 100) / 100 - 0.5) * 2.4;
-    add(x + j, -67.2, 'row', { scale: 0.9 + ((hashString(`lvs${x}`) % 25) / 100), lean: { x: 0, z: -0.6 } });
-    add(x + 5 + j * 0.7, -73.0, 'row', { scale: 0.85 + ((hashString(`lvn${x}`) % 25) / 100), lean: { x: 0, z: 0.6 } });
+    // keep the footbridge landing clear (its deck starts at the levee top)
+    if (Math.abs(x + j - BRIDGE.x) > BRIDGE.halfWidth + 3.5) add(x + j, -67.2, 'row', { scale: 0.9 + ((hashString(`lvs${x}`) % 25) / 100), lean: { x: 0, z: -0.6 } });
+    if (Math.abs(x + 5 + j * 0.7 - BRIDGE.x) > BRIDGE.halfWidth + 3.5) add(x + 5 + j * 0.7, -73.0, 'row', { scale: 0.85 + ((hashString(`lvn${x}`) % 25) / 100), lean: { x: 0, z: 0.6 } });
   }
   // far bank + hillside dots (cheap)
   for (let x = -260; x <= 260; x += 16) add(x + ((hashString(`fb${x}`) % 60) / 10), -99.5, 'row', { scale: 0.8 });
@@ -865,7 +866,7 @@ function buildPoles() {
   {
     const cr = ROADS.crossingRoad;
     const line = [];
-    for (const z of [4.5, -12, -45.5]) line.push({ id: `PCR${line.length}`, x: cr.x + 2.55, z, y: groundY(cr.x + 2.55, z), rotY: 0, transformer: false, streetLight: true, side: 1 });
+    for (const z of [4.5, -8, -45.5]) line.push({ id: `PCR${line.length}`, // -8: clear of lane LNE's mouth (z -12.8) x: cr.x + 2.55, z, y: groundY(cr.x + 2.55, z), rotY: 0, transformer: false, streetLight: true, side: 1 });
     lines.push({ id: 'crossing-E', poles: line });
   }
   // north road, north edge

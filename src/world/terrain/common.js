@@ -5,7 +5,7 @@
  *
  * Height stack above layout.groundY (keeps flat layers apart at grazing angles):
  *   ground mesh 0 · gravel paths +0.02 · asphalt +0.03 · road decals +0.034
- *   · paint +0.038 · gutter covers +0.05 · gutter rims +0.065 · aprons / plaza +0.07
+ *   · paint +0.038 · gutter covers +0.058 · gutter rims +0.065 · aprons / plaza +0.07
  */
 import * as THREE from 'three';
 import { groundY, MAIN_STREET, ROADS, PLAZA, clamp, lerp, smoothstep } from '../../core/layout.js';
@@ -15,7 +15,7 @@ export const LIFT = {
   road: 0.03,
   decal: 0.034,
   mark: 0.038,
-  gutterTop: 0.05,
+  gutterTop: 0.058,
   gutterRim: 0.065,
   apron: 0.07,
   plaza: 0.07,
@@ -29,6 +29,24 @@ export const CR = ROADS.crossingRoad;
 export const NR = ROADS.northRoad;
 export const LP = ROADS.leveePath;
 export const MS = MAIN_STREET;
+
+/**
+ * Residential lanes (路地, layout ROADS.lanes) as straight-road descriptors.
+ * Profile: asphalt 0..hw (white edge line just inside), one concrete U-gutter
+ * on the north side hw..hw+0.3, a narrow concrete apron up to the lot fronts
+ * (hw+0.6).  x0/x1 = asphalt extent: LNE runs west into the crossing road,
+ * LNW east up to the plaza kerb; the other ends fade into gravel paths.
+ */
+export const LANES = ROADS.lanes.map((l) => {
+  const hw = l.halfWidth;
+  let x0 = l.from, x1 = l.to, join0 = false, join1 = false;
+  if (l.id === 'LNE') { x0 = ROADS.crossingRoad.x + ROADS.crossingRoad.shoulder; join0 = true; }
+  if (l.id === 'LNW') { x1 = PLAZA.xMin - 0.02; join1 = true; }
+  return {
+    ...l, axis: 'x', hw, halfWidth: hw - 0.2, shoulder: hw, edgeLine: hw - 0.22, gutter: [hw, hw + 0.3], apron: hw + 0.6,
+    x0, x1, join0, join1,
+  };
+});
 
 // ---------------------------------------------------------------------------
 // value noise (deterministic, cheap) for colour variation & placement
@@ -136,6 +154,7 @@ export function onRoad(x, z, margin = 0) {
   if (Math.abs(z - SF.z) < SF.shoulder + margin && x > SF.from && x < SF.to) return true;
   if (Math.abs(z - NR.z) < NR.shoulder + margin && x > NR.from && x < NR.to) return true;
   if (Math.abs(x - CR.x) < CR.shoulder + margin && z > CR.from && z < CR.to) return true;
+  for (const l of LANES) if (Math.abs(z - l.z) < l.shoulder + margin && x > l.x0 - margin && x < l.x1 + margin) return true;
   if (z > MS.zStart && z < MS.zEnd) {
     const f = MS.atZ(z);
     if (Math.abs((x - f.x) * f.nx + (z - f.z) * f.nz) < MS.shoulder + margin) return true;

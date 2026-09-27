@@ -12,7 +12,7 @@
  */
 import * as THREE from 'three';
 import { PLAZA, STATION, LOTS, TREES } from '../../core/layout.js';
-import { LIFT, SF, CR, NR, MS, MS_S0, MS_S1, CORNERS, cornerById, cornerArc, straightPoint, groundY, fbm, hash2, addSlab } from './common.js';
+import { LIFT, SF, CR, NR, MS, MS_S0, MS_S1, LANES, CORNERS, cornerById, cornerArc, straightPoint, groundY, fbm, hash2, addSlab } from './common.js';
 
 const CONC_UV = 1 / 2; // concrete slab joints every 2 m
 const PLAZA_UV = 1 / 6.4;
@@ -44,8 +44,10 @@ function sweptSlab(b, frame, t0, t1, d0, d1, lift, color, { step = 1, uvScale = 
   });
   const skirt = (pa, pb, c) => {
     // vertical quad from pa..pb (top) down to the ground; faces whichever way — make it double by emitting both windings
-    const a0 = b.vert(pa.x, pa.g - 0.02, pa.z, 0, 0, c), b0 = b.vert(pb.x, pb.g - 0.02, pb.z, 0.05, 0, c);
-    const b1 = b.vert(pb.x, pb.y, pb.z, 0.05, 0.02, c), a1 = b.vert(pa.x, pa.y, pa.z, 0, 0.02, c);
+    // world-scaled uvs (u along the edge, v up) so skirts show the same concrete grain as the top
+    const ua = (pa.x + pa.z) * uvScale, ub = (pb.x + pb.z) * uvScale;
+    const a0 = b.vert(pa.x, pa.g - 0.02, pa.z, ua, 0, c), b0 = b.vert(pb.x, pb.g - 0.02, pb.z, ub, 0, c);
+    const b1 = b.vert(pb.x, pb.y, pb.z, ub, (pb.y - pb.g + 0.02) * uvScale, c), a1 = b.vert(pa.x, pa.y, pa.z, ua, (pa.y - pa.g + 0.02) * uvScale, c);
     b.quad(a0, b0, b1, a1);
     b.quad(a0, a1, b1, b0);
   };
@@ -55,7 +57,8 @@ function sweptSlab(b, frame, t0, t1, d0, d1, lift, color, { step = 1, uvScale = 
     if (skirtOuter) skirt(P(ta, d1), P(tb, d1), shade(colF(ta, d1)));
     if (skirtInner) skirt(P(ta, d0), P(tb, d0), shade(colF(ta, d0)));
   }
-  if (skirtEnds) {
+  // end skirts only where the slab stands proud of its neighbours (a 4 mm step shows no side)
+  if (skirtEnds && liftF(t0, d0) - LIFT.apron >= 0.01) {
     skirt(P(t0, d0), P(t0, d1), shade(colF(t0, d0)));
     skirt(P(t1, d0), P(t1, d1), shade(colF(t1, d0)));
   }
@@ -116,7 +119,14 @@ function straightBands(bins) {
   sweptSlab(conc, sfN, cSE.K.x + cSE.R, SF.to, SF.gutter[1], SF.gutter[1] + 0.32, LIFT.apron, concTint(14), { step: 2 });
   // crossing road, east side (south piece) — west side is the plaza strip
   const crE = axisFrame(CR, 1);
-  sweptSlab(conc, crE, -23.8, cSE.K.z - cSE.R, CR.gutter[1], CR.gutter[1] + 0.3, LIFT.apron, concTint(15), { step: 2 });
+  const lne = LANES.find((l) => l.join0);
+  sweptSlab(conc, crE, -23.8, lne.z - lne.gutter[1], CR.gutter[1], CR.gutter[1] + 0.3, LIFT.apron, concTint(15), { step: 2 });
+  sweptSlab(conc, crE, lne.z + lne.hw, cSE.K.z - cSE.R, CR.gutter[1], CR.gutter[1] + 0.3, LIFT.apron, concTint(15), { step: 2 });
+  // residential lanes: narrow concrete strip between the north gutter and the lot fronts
+  for (const l of LANES) {
+    const a = l.join0 ? CR.x + CR.gutter[1] : l.x0 + 0.3;
+    sweptSlab(conc, axisFrame(l, -1), a, l.x1 - 0.3, l.gutter[1], l.apron, LIFT.apron, concTint(20 + l.z), { step: 2 });
+  }
   // north road, north side
   const nrN = axisFrame(NR, -1);
   const cNW = cornerById('crNW');
@@ -210,7 +220,7 @@ function plaza(bins) {
     return [x, PLAZA_Y, z, x * PLAZA_UV, z * PLAZA_UV, tint(x, z)];
   });
   // decorative bands of darker tiles: a border frame, two cross bands and a ring round the grand tree
-  const bandY = PLAZA_Y + 0.003;
+  const bandY = PLAZA_Y + 0.008; // far enough above the tiles for depth precision at 100+ m
   const bandCol = [0.8, 0.79, 0.8];
   const band = (xa, za, xb, zb) => {
     const ids = [[xa, za], [xb, za], [xb, zb], [xa, zb]].map(([x, z]) => p.vert(x, bandY, z, x * PLAZA_UV, z * PLAZA_UV, bandCol));
@@ -283,22 +293,35 @@ function plaza(bins) {
   const yT = PLAZA_Y;
   const ent = STATION.entrance;
   dotPad(t, -1.0, z1 - 0.45, 0, -1, 2, 8, yT); // warning blocks across the zebra landing
+  // orthogonal guide line (誘導ブロック) round the flower beds, 2x2 warning pads at
+  // every turn / junction, a branch to the bus-stop boarding strip
   const route = [
-    { x: -1.0, z: z1 - 0.75 }, { x: -1.0, z: 0.3 }, { x: 2.4, z: 0.3 }, { x: 2.4, z: -6.6 }, { x: ent.x, z: -6.6 }, { x: ent.x, z: ent.z + 0.9 },
+    { x: -1.0, z: z1 - 0.75 }, { x: -1.0, z: 0.45 }, { x: 2.3, z: 0.45 }, { x: 2.3, z: -6.6 }, { x: ent.x, z: -6.6 }, { x: ent.x, z: ent.z + 1.05 },
   ];
-  for (let i = 0; i < route.length - 1; i++) {
-    const a = route[i], c2 = route[i + 1];
-    const L = Math.hypot(c2.x - a.x, c2.z - a.z);
-    const dx = (c2.x - a.x) / L, dz = (c2.z - a.z) / L;
-    // leave 0.3 m at each turn for the dot block
-    const s0 = i === 0 ? 0 : 0.15, s1 = L - 0.15;
-    tactileRun(t, { x: a.x + dx * s0, z: a.z + dz * s0 }, { x: a.x + dx * s1, z: a.z + dz * s1 }, 'line', yT);
-    if (i < route.length - 2) tactileTile(t, c2.x, c2.z, dx, dz, 'dot', yT);
-  }
+  guideLine(t, route, yT, 0);
+  guideLine(t, [{ x: 2.3, z: 0.45 }, { x: PLAZA.busStop.x - 1.5, z: 0.45 }, { x: PLAZA.busStop.x - 1.5, z: z1 - 0.95 }], yT, 1);
   dotPad(t, ent.x, ent.z + 0.6, 0, -1, 2, 3, yT); // at the entrance door
-  // boarding strip at the bus stop and the taxi stand (along the kerb)
-  tactileRun(t, { x: PLAZA.busStop.x - 1.8, z: z1 - 0.5 }, { x: PLAZA.busStop.x + 1.8, z: z1 - 0.5 }, 'dot', yT);
-  tactileRun(t, { x: PLAZA.busStop.x - 1.8, z: z1 - 0.8 }, { x: PLAZA.busStop.x + 1.8, z: z1 - 0.8 }, 'dot', yT);
+  // boarding strip at the bus stop (along the kerb)
+  tactileRun(t, { x: PLAZA.busStop.x - 2.1, z: z1 - 0.5 }, { x: PLAZA.busStop.x + 1.8, z: z1 - 0.5 }, 'dot', yT);
+  tactileRun(t, { x: PLAZA.busStop.x - 2.1, z: z1 - 0.8 }, { x: PLAZA.busStop.x + 1.8, z: z1 - 0.8 }, 'dot', yT);
+}
+
+/**
+ * Tactile guide line along an axis-aligned polyline: linear blocks on the
+ * runs and a 2x2 dot pad at each interior vertex.  `startsAtPad` = the first
+ * vertex already carries a pad (a branch off another line): stop short of it.
+ */
+function guideLine(t, pts, yT, startsAtPad) {
+  const PAD = 0.3; // half-size of a 2x2 pad
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], c = pts[i + 1];
+    const L = Math.hypot(c.x - a.x, c.z - a.z);
+    const dx = (c.x - a.x) / L, dz = (c.z - a.z) / L;
+    const s0 = i > 0 || startsAtPad ? PAD : 0;
+    const s1 = i < pts.length - 2 ? L - PAD : L;
+    if (s1 - s0 > 0.15) tactileRun(t, { x: a.x + dx * s0, z: a.z + dz * s0 }, { x: a.x + dx * s1, z: a.z + dz * s1 }, 'line', yT);
+    if (i < pts.length - 2) dotPad(t, c.x, c.z, 0, -1, 2, 2, yT);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -317,7 +340,12 @@ function konbini(bins) {
   const conc = bins.get('concrete');
   const ramp = 0.45;
   const frame = msFrameSide(1);
-  const tint = concTint(77);
+  // a touch darker / warmer than the street aprons: the sunlit forecourt otherwise clips to white
+  const base = concTint(77);
+  const tint = (t, d) => {
+    const c = base(t, d);
+    return [c[0] * 0.9, c[1] * 0.89, c[2] * 0.87];
+  };
   // ramp strip (street side) then the flat forecourt
   sweptSlab(conc, frame, s0, s1, d0, d0 + ramp, (t, d) => (d < d0 + ramp * 0.5 ? LIFT.gutterRim + 0.004 : KONBINI_LIFT), tint, { skirtOuter: false });
   sweptSlab(conc, frame, s0, s1, d0 + ramp, d1 + 0.25, KONBINI_LIFT, tint, { skirtOuter: false });
@@ -328,7 +356,7 @@ function konbini(bins) {
   const zB = fS.z + fS.nz * (d1 + 0.25);
   const cx = corner.C.x;
   const quad = [{ x: cx, z: zA }, { x: xOuter, z: zA }, { x: xOuter, z: zB }, { x: cx, z: fS.z }];
-  const ids = quad.map((p) => conc.vert(p.x, groundY(p.x, p.z) + KONBINI_LIFT - 0.002, p.z, p.x * CONC_UV, p.z * CONC_UV, [0.98, 0.98, 0.98]));
+  const ids = quad.map((p) => conc.vert(p.x, groundY(p.x, p.z) + KONBINI_LIFT - 0.002, p.z, p.x * CONC_UV, p.z * CONC_UV, [0.88, 0.87, 0.85]));
   conc.quad(ids[0], ids[3], ids[2], ids[1]);
   addSlab(conc, { x: cx, z: zA + 0.02 }, { x: xOuter, z: zA + 0.02 }, 0.04, -0.02, KONBINI_LIFT - 0.003, [0.92, 0.92, 0.94]);
 

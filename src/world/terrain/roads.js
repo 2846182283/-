@@ -5,6 +5,7 @@
  *    edge to the end of the street (carriageway + pedestrian shoulders)
  *  - station-front road, crossing road (two pieces either side of the level
  *    crossing deck), north road: straight ribbons
+ *  - residential lanes (路地, one-lane tint)
  *  - rounded kerb fillets at every junction corner
  *
  * Vertex colours carry the large-scale "life" of the road: tyre-polished wheel
@@ -12,7 +13,7 @@
  * drift along the street.  The canvas texture adds cracks / seams / aggregate.
  */
 import { ROADS } from '../../core/layout.js';
-import { LIFT, SF, CR, NR, MS, MS_S0, MS_S1, CR_SEGMENTS, CORNERS, cornerArc, straightPoint, roadY, fbm, vnoise, smoothstep, groundY } from './common.js';
+import { LIFT, SF, CR, NR, MS, MS_S0, MS_S1, LANES, CR_SEGMENTS, CORNERS, cornerArc, straightPoint, roadY, fbm, vnoise, smoothstep, groundY } from './common.js';
 
 const UV = 1 / 8; // asphalt texture covers 8 m
 
@@ -116,6 +117,8 @@ export function buildRoads(bins) {
   straightRoad(b, SF, SF.from, SF.to, -SF.shoulder, SF.shoulder, 2);
   for (const seg of CR_SEGMENTS) straightRoad(b, CR, seg.z0, seg.z1, -CR.shoulder, CR.shoulder, 3, false);
   straightRoad(b, NR, NR.from, NR.to, -NR.shoulder, NR.shoulder, 4, false);
+  // residential lanes: single faded carriageway (one-lane tint)
+  for (const l of LANES) straightRoad(b, l, l.x0, l.x1, -l.shoulder, l.shoulder, 5 + (l.z & 7), false);
   for (const c of CORNERS) fillet(b, c);
   // north road: rounded dead end (turning bulb) at its east end
   {

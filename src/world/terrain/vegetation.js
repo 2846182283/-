@@ -10,8 +10,8 @@
  * Everything here is noOutline and casts no shadows.
  */
 import * as THREE from 'three';
-import { TERRAIN, RAIL, PLATFORM, POLE_LINES, TREES, makeRng, groundY } from '../../core/layout.js';
-import { LIFT, LP, NR, onRoad, inPlaza, GeoBuilder, fbm } from './common.js';
+import { TERRAIN, RAIL, PLATFORM, POLE_LINES, TREES, LOTS, makeRng, groundY } from '../../core/layout.js';
+import { LIFT, LP, NR, LANES, onRoad, inPlaza, GeoBuilder, fbm } from './common.js';
 import { WATERLINE, REVET } from './river.js';
 import { PLAZA_Y, plazaTrees } from './paving.js';
 
@@ -22,13 +22,20 @@ const SWAY = {
     {
       float hgt = max( position.y, 0.0 );
       vec3 ip = vec3( 0.0 );
+      vec3 w = vec3( toonWind.x, 0.0, toonWind.z );
       #ifdef USE_INSTANCING
         ip = vec3( instanceMatrix[3][0], 0.0, instanceMatrix[3][2] );
+        // bring the world wind into the tuft's local frame (undo yaw + scale) so every tuft leans the same way
+        mat3 im3 = mat3( instanceMatrix );
+        w = transpose( im3 ) * w;
+        float sc2 = max( dot( im3[0], im3[0] ), 1e-4 );
+        w /= sc2;
+        w *= length( im3[1] );
       #endif
       float ph = toonTime * 2.1 + ip.x * 0.63 + ip.z * 0.41;
       float amt = hgt * hgt * ( 0.10 + 0.06 * sin( ph ) + 0.08 * toonWind.y * sin( ph * 2.7 ) );
-      transformed.x += toonWind.x * amt;
-      transformed.z += toonWind.z * amt;
+      transformed.x += w.x * amt;
+      transformed.z += w.z * amt;
     }`,
 };
 
@@ -44,34 +51,69 @@ const FLOWER_SWAY = {
     }`,
 };
 
-/** Unit tuft: 5 (or 7) blades, height 1, radius ~0.5, colours dark base -> light tip. */
-function tuftGeometry(blades = 5, seed = 1, spread = 1) {
+/**
+ * Unit tuft: `blades` thin grass blades (height <= 1, footprint radius ~0.5),
+ * each a two-segment bent strip (dark base -> light tip).  Normals point up so
+ * tufts shade like the painted ground.
+ */
+function tuftGeometry(blades = 9, seed = 1, spread = 1) {
   const rng = makeRng(seed);
-  const pos = [], col = [], nrm = [];
+  const pos = [], col = [], nrm = [], idx = [];
   for (let i = 0; i < blades; i++) {
-    const a = (i / blades) * Math.PI * 2 + rng() * 0.8;
-    const lean = (0.3 + rng() * 0.4) * spread;
-    const h = 0.45 + rng() * 0.55;
-    const w = (0.09 + rng() * 0.06) * spread;
-    const cx = Math.cos(a) * 0.12, cz = Math.sin(a) * 0.12;
-    const px = -Math.sin(a) * w, pz = Math.cos(a) * w;
-    const tx = cx + Math.cos(a) * lean, tz = cz + Math.sin(a) * lean;
-    pos.push(cx - px, 0, cz - pz, cx + px, 0, cz + pz, tx, h, tz);
-    col.push(0.82, 0.88, 0.8, 0.82, 0.88, 0.8, 1.1, 1.08, 1.0);
-    nrm.push(0, 1, 0, 0, 1, 0, 0, 1, 0);
+    const a = (i / blades) * Math.PI * 2 + rng() * 0.9;
+    const lean = (0.25 + rng() * 0.45) * spread;
+    const h = 0.5 + rng() * 0.5;
+    const w = (0.035 + rng() * 0.025) * Math.max(0.6, spread);
+    const r0 = 0.05 + rng() * 0.06;
+    const ca = Math.cos(a), sa = Math.sin(a);
+    const px = -sa * w, pz = ca * w;
+    const cx = ca * r0, cz = sa * r0;
+    // mid point: little lean, full height fraction; tip: most of the lean (bend outwards)
+    const mx = cx + ca * lean * 0.3, mz = cz + sa * lean * 0.3, my = h * 0.62;
+    const tx = cx + ca * lean, tz = cz + sa * lean, ty = h;
+    const b = pos.length / 3;
+    pos.push(cx - px, 0, cz - pz, cx + px, 0, cz + pz, mx - px * 0.7, my, mz - pz * 0.7, mx + px * 0.7, my, mz + pz * 0.7, tx, ty, tz);
+    col.push(0.8, 0.86, 0.78, 0.8, 0.86, 0.78, 0.97, 0.99, 0.92, 0.97, 0.99, 0.92, 1.12, 1.1, 1.02);
+    for (let k = 0; k < 5; k++) nrm.push(0, 1, 0);
+    idx.push(b, b + 1, b + 3, b, b + 3, b + 2, b + 2, b + 3, b + 4);
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx);
   return g;
+}
+
+/**
+ * Shop fronts along the main street (incl. the konbini forecourt) are swept
+ * clean and paved higher than the house aprons: no weeds there.
+ */
+const SHOP_FRONTS = LOTS.filter((l) => l.street === 'main' && l.type !== 'house').map((l) => ({
+  x: l.x, z: l.z, c: Math.cos(l.rotY), s: Math.sin(l.rotY), hw: l.width / 2 + (l.type === 'konbini' ? 3.5 : 0.6), d0: l.depth / 2 - 0.5, d1: l.depth / 2 + (l.setback || 0) + 1.2,
+}));
+function inShopFront(x, z) {
+  for (const f of SHOP_FRONTS) {
+    const dx = x - f.x, dz = z - f.z;
+    const lx = dx * f.c - dz * f.s, lz = dx * f.s + dz * f.c; // world -> lot local
+    if (Math.abs(lx) < f.hw && lz > f.d0 && lz < f.d1) return true;
+  }
+  return false;
 }
 
 const GREENS = ['#9cc276', '#aacd82', '#92ba70', '#b7d38c', '#a3c47a', '#afc985'];
 const DRY = ['#b9c08a', '#c2c394', '#a8b57c'];
 const REED = ['#9fb877', '#b3c486', '#8faa6c'];
 
-export function buildVegetation(ctx, { gutterRuns, stairs, carPark }) {
+// crop palettes for the vegetable plots (lanes.js)
+const CROPS = {
+  cabbage: ['#8fb99a', '#9cc4a2', '#86b08f'],
+  lettuce: ['#b9d97e', '#aad072', '#c4de8c'],
+  onion: ['#6f9a62', '#7ea86d', '#6a935c'],
+  peas: ['#86b46c', '#93bf76'],
+};
+
+export function buildVegetation(ctx, { gutterRuns, stairs, carPark, crops = [], grassPlots = [] }) {
   const rng = makeRng(1357);
   const tufts = [];
   const reeds = [];
@@ -147,7 +189,7 @@ export function buildVegetation(ctx, { gutterRuns, stairs, carPark }) {
         const o2 = { x: fx - nx * (run.width / 2 + 0.07), z: fz - nz * (run.width / 2 + 0.07) };
         const outside = onRoad(o1.x, o1.z) ? o2 : o1;
         const inside = outside === o1 ? o2 : o1;
-        if (r < 0.26 && !inPlaza(outside.x, outside.z, -0.2)) {
+        if (r < 0.26 && !inPlaza(outside.x, outside.z, -0.2) && !inShopFront(outside.x, outside.z)) {
           const n = 1 + Math.floor(rng() * 3);
           for (let k = 0; k < n; k++) tuft(tufts, outside.x + (rng() - 0.5) * 0.25, groundY(outside.x, outside.z) + LIFT.apron - 0.005, outside.z + (rng() - 0.5) * 0.25, 0.1 + rng() * 0.2);
           if (rng() < 0.12) flower(outside.x, groundY(outside.x, outside.z) + LIFT.apron, outside.z, rng() < 0.6 ? 'dandelion' : 'clover');
@@ -203,8 +245,10 @@ export function buildVegetation(ctx, { gutterRuns, stairs, carPark }) {
   }
   // slopes (inner south slope, river-side slope above the revetment)
   const slopeBands = [[T.leveeSouthFoot - 0.2, T.leveeTopSouth + 0.1], [REVET.south[1] + 0.3, T.leveeTopNorth - 0.1]];
-  for (let i = 0; i < 1100; i++) {
-    const x = -210 + rng() * 420;
+  // (weighted towards the stretch seen from the levee / hero views)
+  const nSlope = Math.round(1600 * (ctx.lod?.density ?? 1));
+  for (let i = 0; i < nSlope; i++) {
+    const x = i % 3 === 0 ? -210 + rng() * 420 : -80 + rng() * 160;
     const band = slopeBands[i % 2];
     const z = band[0] + rng() * (band[1] - band[0]);
     if (stairs && Math.abs(x - stairs.x) < 1.6) continue;
@@ -264,6 +308,25 @@ export function buildVegetation(ctx, { gutterRuns, stairs, carPark }) {
     cluster(t.x, t.z, groundY(t.x, t.z), 8, 0.9, 0.1, 0.26, GREENS);
   }
 
+  // ---- lanes: vegetable-plot crops, weedy vacant lots, lane verges ----------------------
+  for (const c of crops) tuft(tufts, c.x, c.y, c.z, c.h, c.w, CROPS[c.pal]);
+  for (const p of grassPlots) {
+    for (let i = 0; i < 26; i++) {
+      const x = p.x0 + 0.5 + rng() * (p.x1 - p.x0 - 1), z = p.z0 + 0.5 + rng() * (p.z1 - p.z0 - 1);
+      cluster(x, z, groundY(x, z), 2 + Math.floor(rng() * 3), 0.35, 0.12, 0.38, rng() < 0.3 ? DRY : GREENS);
+      if (rng() < 0.5) flower(x + 0.3, groundY(x + 0.3, z), z, rng.pick(flowerKinds));
+    }
+  }
+  for (const l of LANES) {
+    // south verge (no gutter on that side): weeds along the asphalt edge
+    for (let x = l.x0 + 0.5; x < l.x1 - 0.5; x += 0.7) {
+      if (rng() < 0.45) {
+        const z = l.z + l.shoulder + 0.08 + rng() * 0.4;
+        tuft(tufts, x + rng() * 0.3, groundY(x, z), z, 0.1 + rng() * 0.22);
+      }
+    }
+  }
+
   // ---- meshes --------------------------------------------------------------------------------
   const tuftMat = ctx.toon.mat('#ffffff', { vertexColors: true, side: THREE.DoubleSide, vertexPatch: SWAY, name: 'terrainTuft' });
   const out = [];
@@ -273,7 +336,7 @@ export function buildVegetation(ctx, { gutterRuns, stairs, carPark }) {
     im.name = name;
     out.push(im);
   };
-  mk(tuftGeometry(6, 3, 1.25), tufts, 'terrain:tufts');
+  mk(tuftGeometry(9, 3, 1.1), tufts, 'terrain:tufts');
   mk(tuftGeometry(7, 9, 0.6), reeds, 'terrain:reeds');
 
   const fg = fb.build({ colors: true });

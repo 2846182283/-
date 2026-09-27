@@ -153,6 +153,7 @@ export function buildFacadeWall(B, P, f) {
     const uvf = wallUV(zone.band, uOff, shift);
     const pts = gp.map(([u, y]) => [u, y, 0]);
     B.poly('wall', pts, zone.color, pts.map(uvf), [0, 0, 1]);
+    B.shadowPoly(pts);
     // gable vent (換気口) on kawara houses / a small louvre
     if ((b.roof.type === 'gableX' || b.roof.type === 'gableZ') && P.lod !== 'simple') {
       const ay = top + (rp.ridgeY - rp.t - top) * 0.45;
@@ -180,6 +181,8 @@ export function buildFacadeWall(B, P, f) {
 export function buildFoundation(B, P, b) {
   const c = P.found;
   B.box('solid', b.x0 + 0.01, -0.9, b.z0 + 0.01, b.x1 - 0.01, FOUND - 0.02, b.z1 - 0.01, c, { skip: 'y' });
+  // shadow proxy for the whole block up to the wall top (roof slabs add their own)
+  B.shadowBox(b.x0, -0.9, b.z0, b.x1, b.top, b.z1);
   // underfloor vents (old houses) on the front and sides
   if (P.trad && P.lod === 'full') {
     const xs = [];
@@ -251,6 +254,8 @@ function slab(c, top, eaveEdge, verges, opts = {}) {
     bottom: { kind: 'solid', color: P.soffit },
     sides,
   });
+  // the same slab, closed, is the roof's shadow proxy (eave overhang shadows on the walls)
+  B.hexa(top, bot, { top: SHADOW_FACE, bottom: SHADOW_FACE, sides: SHADOW_SIDES });
 }
 
 function gableRoof(c) {
@@ -324,10 +329,15 @@ function leanRoof(c) {
   gutters(c, [[X0, X1, hd + e, yE, 1]]);
 }
 
+const SHADOW_FACE = { kind: 'shadow', color: '#ffffff' };
+const SHADOW_SIDES = [SHADOW_FACE, SHADOW_FACE, SHADOW_FACE, SHADOW_FACE];
+
 function buildFlatRoof(B, P, b) {
+  if (b.roof.parapet) return buildParapetRoof(B, P, b);
   // flat roof with parapet (used as a small roof terrace)
   const y = b.top;
   const c = P.zones[0].color;
+  B.shadowBox(b.x0 - 0.05, y, b.z0 - 0.05, b.x1 + 0.05, y + 0.54, b.z1 + 0.05);
   B.box('solid', b.x0 - 0.05, y, b.z0 - 0.05, b.x1 + 0.05, y + 0.18, b.z1 + 0.05, '#bfc1c2');
   const pc = P.zones[0];
   const uv = (f, p) => [(p[0] + p[2]) / WALL_U_PERIOD, wallV(pc.band, p[1] - FOUND)];
@@ -344,6 +354,39 @@ function buildFlatRoof(B, P, b) {
   // drain spout
   B.box('solid', b.x1 + 0.05, y + 0.05, b.z1 - 0.6, b.x1 + 0.3, y + 0.12, b.z1 - 0.5, '#9aa1a8');
   B.cyl('solid', [b.x1 + 0.25, y + 0.05, b.z1 - 0.55], [b.x1 + 0.25, P.gy(b.x1 + 0.25, b.z1 - 0.55) + 0.1, b.z1 - 0.55], 0.04, P.gutter, 6);
+}
+
+/**
+ * Apartment roof: flat membrane behind a parapet on all four sides, metal
+ * coping, a roof hatch, a drain spout and a downpipe to the ground.
+ */
+function buildParapetRoof(B, P, b) {
+  const y = b.top;
+  const zone = P.zones[1];
+  const H = 0.55, t = 0.14;
+  const uv = (f, p) => [(p[0] + p[2]) / WALL_U_PERIOD, wallV(zone.band, p[1] - FOUND)];
+  B.box('solid', b.x0 + t, y - 0.1, b.z0 + t, b.x1 - t, y + 0.12, b.z1 - t, '#b3b6b8', { skip: 'y' });
+  // parapet walls (outer face continues the facade finish)
+  B.box('wall', b.x0, y, b.z1 - t, b.x1, y + H, b.z1, zone.color, { uv, skip: 'y' });
+  B.box('wall', b.x0, y, b.z0, b.x1, y + H, b.z0 + t, zone.color, { uv, skip: 'y' });
+  B.box('wall', b.x0, y, b.z0 + t, b.x0 + t, y + H, b.z1 - t, zone.color, { uv, skip: 'yzZ' });
+  B.box('wall', b.x1 - t, y, b.z0 + t, b.x1, y + H, b.z1 - t, zone.color, { uv, skip: 'yzZ' });
+  const cc = '#9aa1a8';
+  B.box('metal', b.x0 - 0.03, y + H, b.z1 - t - 0.02, b.x1 + 0.03, y + H + 0.05, b.z1 + 0.03, cc);
+  B.box('metal', b.x0 - 0.03, y + H, b.z0 - 0.03, b.x1 + 0.03, y + H + 0.05, b.z0 + t + 0.02, cc);
+  B.box('metal', b.x0 - 0.03, y + H, b.z0 + t + 0.02, b.x0 + t + 0.02, y + H + 0.05, b.z1 - t - 0.02, cc, { skip: 'zZ' });
+  B.box('metal', b.x1 - t - 0.02, y + H, b.z0 + t + 0.02, b.x1 + 0.03, y + H + 0.05, b.z1 - t - 0.02, cc, { skip: 'zZ' });
+  B.shadowBox(b.x0, y, b.z0, b.x1, y + H + 0.05, b.z1);
+  // roof hatch + vent pipe
+  const hx = b.x0 + (b.x1 - b.x0) * 0.3, hz = (b.z0 + b.z1) / 2;
+  B.box('solid', hx - 0.4, y + 0.12, hz - 0.4, hx + 0.4, y + 0.45, hz + 0.4, '#c9cbcc');
+  B.cyl('solid', [hx + 1.6, y + 0.12, hz], [hx + 1.6, y + 0.9, hz], 0.06, '#d9d6cf', 6);
+  B.boxC('solid', hx + 1.6, y + 0.95, hz, 0.2, 0.1, 0.2, '#9aa1a8');
+  // drain spout + downpipe on the right side
+  const dz = b.z0 + 0.6;
+  B.box('solid', b.x1, y + 0.05, dz - 0.05, b.x1 + 0.25, y + 0.12, dz + 0.05, cc);
+  B.pipe('solid', [[b.x1 + 0.2, y + 0.05, dz], [b.x1 + 0.2, y - 0.2, dz], [b.x1 + 0.06, y - 0.4, dz], [b.x1 + 0.06, P.gy(b.x1 + 0.06, dz) + 0.15, dz]], 0.04, P.gutter, 6);
+  B.boxC('solid', b.x1 + 0.06, P.gy(b.x1 + 0.06, dz) + 0.05, dz, 0.3, 0.12, 0.3, '#a9a7a1');
 }
 
 /** Ridge (棟): stacked kawara layers + round cap + onigawara, or a metal cap. */

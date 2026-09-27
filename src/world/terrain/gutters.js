@@ -11,9 +11,10 @@
  */
 import * as THREE from 'three';
 import { PLAZA, LOTS } from '../../core/layout.js';
-import { LIFT, SF, CR, NR, MS, MS_S0, MS_S1, CORNERS, cornerById, cornerArc, groundY, hash2, GeoBuilder } from './common.js';
+import { LIFT, SF, CR, NR, MS, MS_S0, MS_S1, LANES, CORNERS, cornerById, cornerArc, groundY, hash2, GeoBuilder } from './common.js';
 
 const PIECE = 0.5;
+const LID_H = 0.1; // unit lid height (its sides reach well below the surround)
 
 /** Resample a polyline into points every `step` metres (keeps ends). */
 function resample(pts, step) {
@@ -73,13 +74,22 @@ export function gutterRuns() {
   xRun(SF, -1, cSE.K.x + cSE.R, SF.to, 'sfN');
   // crossing road (stop short of the barriers)
   zRun(CR, -1, cSW.K.z - cSW.R, -23.3, 'crW');
-  zRun(CR, 1, cSE.K.z - cSE.R, -23.3, 'crE');
+  // east side: broken by the mouth of lane LNE
+  const lne = LANES.find((l) => l.join0);
+  zRun(CR, 1, cSE.K.z - cSE.R, lne.z + lne.hw, 'crE');
+  zRun(CR, 1, lne.z - lne.gutter[1], -23.3, 'crE');
   zRun(CR, -1, -41.3, cNW.K.z + cNW.R, 'crW');
   zRun(CR, 1, -41.3, cNE.K.z + cNE.R, 'crE');
   // north road
   xRun(NR, -1, NR.from, NR.to, 'nrN');
   xRun(NR, 1, NR.from, cNW.K.x - cNW.R, 'nrS');
   xRun(NR, 1, cNE.K.x + cNE.R, NR.to, 'nrS');
+  // residential lanes: one channel on the north side
+  for (const l of LANES) {
+    const a = l.join0 ? CR.x + CR.gutter[1] : l.x0 + 0.3;
+    const b = l.join1 ? l.x1 - 0.3 : l.x1 - 0.3;
+    xRun(l, -1, a, b, `lane:${l.id}`);
+  }
   return runs;
 }
 
@@ -133,9 +143,10 @@ export function buildGutters(ctx, bins, gutterMat) {
       const h = hash2(Math.floor(cx * 3), Math.floor(cz * 3), 91);
       const grate = inZone || k % 5 === 4 || h < 0.06;
       k++;
+      // lid top just below the rims (+0.065) so the covers sit flush in the channel
       const y = groundY(cx, cz) + LIFT.gutterTop;
       q.setFromAxisAngle(up, yaw);
-      p.set(cx, y - 0.05, cz);
+      p.set(cx, y - LID_H, cz);
       sc.set(inner + 0.004, 1, L - 0.012);
       m.compose(p, q, sc);
       (grate ? grates : covers).push(m.clone());
@@ -147,7 +158,7 @@ export function buildGutters(ctx, bins, gutterMat) {
     if (x > -3.5 && x < 1.5) continue;
     const z = PLAZA.zMax + 0.2;
     q.setFromAxisAngle(up, Math.PI / 2);
-    p.set(x, LIFT.gutterTop - 0.05, z);
+    p.set(x, LIFT.road + 0.004 - LID_H, z); // flush with the asphalt
     sc.set(0.34, 1, 0.9);
     m.compose(p, q, sc);
     grates.push(m.clone());
@@ -196,7 +207,7 @@ function rimStrip(b, A, B, w, c) {
  */
 function lidGeometry(u0) {
   const b = new GeoBuilder();
-  const h = 0.1;
+  const h = LID_H;
   const t = [b.vert(-0.5, h, -0.5, u0, 0), b.vert(0.5, h, -0.5, u0 + 0.5, 0), b.vert(0.5, h, 0.5, u0 + 0.5, 1), b.vert(-0.5, h, 0.5, u0, 1)];
   b.quad(t[0], t[3], t[2], t[1]);
   for (const sx of [-1, 1]) {

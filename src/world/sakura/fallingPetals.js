@@ -16,6 +16,7 @@
 import * as THREE from 'three';
 
 const MAX_TRAINS = 4;
+const MAX_ROOFS = 3;
 
 const VERT = /* glsl */ `
 #include <common>
@@ -25,6 +26,8 @@ uniform vec2 uWindOff;
 uniform sampler2D uDensity;
 uniform vec4 uDensityRect;      // minX, minZ, 1/sizeX, 1/sizeZ
 uniform vec4 uTrain[ ${MAX_TRAINS} ]; // x front, z track, dir*speed, length
+uniform vec4 uRoofBox[ ${MAX_ROOFS} ];  // xMin, xMax, zMin, zMax of a roofed area
+uniform vec2 uRoofYK[ ${MAX_ROOFS} ];   // x: roof height, y: fraction of petals kept underneath
 uniform float uPixel;          // radians per pixel
 uniform vec3 uSunDir;
 uniform vec3 uColA;
@@ -96,6 +99,12 @@ void main() {
 
   float keep = step( fract( aSeed2.w * 91.7 + aSeed.y * 13.1 ), max( dens, gust * 0.9 ) );
   keep *= 1.0 - smoothstep( top - 1.0, top + 0.5, p.y ) * ( 1.0 - gust );
+  // roofed areas (station hall, platform canopies): petals cannot fall through the roof
+  for ( int i = 0; i < ${MAX_ROOFS}; i ++ ) {
+    vec4 rb = uRoofBox[ i ];
+    float under = step( rb.x, p.x ) * step( p.x, rb.y ) * step( rb.z, p.z ) * step( p.z, rb.w ) * step( p.y, uRoofYK[ i ].x );
+    keep *= 1.0 - under * step( uRoofYK[ i ].y, fract( aSeed.w * 53.3 + aSeed2.y * 7.1 ) );
+  }
   vec3 rel = p - cameraPosition;
   float edgeF = 1.0 - smoothstep( 0.36, 0.5, max( abs( rel.x ) / box.x, abs( rel.z ) / box.z ) );
   float dist = length( rel );
@@ -227,9 +236,26 @@ function densityTexture(infos, windDir, streetPts) {
   return { tex, rect };
 }
 
+/**
+ * Roofed areas where airborne petals must not hang: the station hall (all of it except a
+ * ~1 m apron inside the entrance) and the two platform canopies (a few petals still blow
+ * in sideways).  Canopy extents mirror station/furniture.js CANOPIES.
+ */
+function roofBoxes(layout) {
+  const B = layout.STATION.building;
+  const top = layout.PLATFORM.top;
+  return [
+    { box: [B.xMin - 0.4, B.xMax + 0.4, B.zMin - 0.4, B.zMax - 1.0], y: B.ridgeY + 0.3, keep: 0 },
+    { box: [-38.4, 12.6, -28.3, -24.0], y: top + 3.3, keep: 0.12 },
+    { box: [-37.4, 11.4, -39.8, -35.9], y: top + 3.3, keep: 0.12 },
+  ];
+}
+
 export function buildFallingPetals(ctx, infos, { counts = [7500, 24000, 8000] } = {}) {
   const { sim, camera, renderer } = ctx;
   const rng = ctx.rng(88017);
+  // low quality: about half the petals (the density map keeps the distribution the same)
+  if (ctx.quality === 'low') counts = counts.map((n) => Math.round(n * 0.5));
   const total = counts[0] + counts[1] + counts[2];
   const quad = new THREE.PlaneGeometry(1, 1);
   const geo = new THREE.InstancedBufferGeometry();
@@ -269,6 +295,8 @@ export function buildFallingPetals(ctx, infos, { counts = [7500, 24000, 8000] } 
         uDensity: { value: null },
         uDensityRect: { value: new THREE.Vector4(rect.minX, rect.minZ, 1 / rect.sizeX, 1 / rect.sizeZ) },
         uTrain: { value: [] },
+        uRoofBox: { value: [] },
+        uRoofYK: { value: [] },
         uPixel: { value: 0.001 },
         uSunDir: { value: new THREE.Vector3() },
         uColA: { value: new THREE.Color('#fff6f9') },
@@ -290,6 +318,9 @@ export function buildFallingPetals(ctx, infos, { counts = [7500, 24000, 8000] } 
   mat.uniforms.uDensity.value = tex;
   mat.uniforms.uWindOff.value = windOff;
   mat.uniforms.uTrain.value = trains;
+  const roofs = roofBoxes(ctx.layout);
+  mat.uniforms.uRoofBox.value = roofs.map((r) => new THREE.Vector4(...r.box));
+  mat.uniforms.uRoofYK.value = roofs.map((r) => new THREE.Vector2(r.y, r.keep));
   mat.uniforms.uSunDir.value = ctx.sunDir;
   mat.name = 'sakura_falling_petals';
 

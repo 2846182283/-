@@ -308,36 +308,94 @@ function noticeBoard(kit) {
 // ---------------------------------------------------------------------------
 // flower beds
 // ---------------------------------------------------------------------------
-const TULIP = ['#e8434f', '#f2c230', '#f7a9bf', '#ffffff', '#f58a4a', '#d9668d'];
-const PANSY = [['#7a5ac8', '#f2d45a'], ['#f2d45a', '#6a3a8a'], ['#ffffff', '#7a5ac8'], ['#f39a6a', '#8a3a3a'], ['#b99ee0', '#ffffff']];
+// Pastel spring palette (樱花粉 / 奶油白 / 淡黄) with one warm accent; weights set how
+// often a drift of that colour appears.
+const TULIP = [
+  ['#f5a9bf', 3], ['#fbf4e4', 2], ['#f6dc8a', 2], ['#f4a391', 1], ['#dcb8e6', 1], ['#fbc9d6', 1.5], ['#e0605a', 0.5],
+];
+const PANSY = [['#b9a2e6', '#f5e07a'], ['#f5e07a', '#8a6aa8'], ['#fbf6ee', '#b99ee0'], ['#f6b89a', '#b86a5a'], ['#d6c6f0', '#fbf6ee'], ['#f7c6d6', '#c86a8a']];
+const LEAF = ['#6f9a58', '#7fa865', '#86b06a', '#6a9360'];
+
+/** Weighted pick from [[value, weight], ...]. */
+function pickW(list, rng, not) {
+  let tot = 0;
+  for (const [v, w] of list) if (v !== not) tot += w;
+  let r = rng() * tot;
+  for (const [v, w] of list) {
+    if (v === not) continue;
+    if ((r -= w) <= 0) return v;
+  }
+  return list[0][0];
+}
+
+/**
+ * Colour drifts along a bed: consecutive x ranges 0.35..0.8 m wide (≈3-7 plants), each
+ * one colour, never the same colour twice in a row.  Returns x -> colour.
+ */
+function drifts(rng, x0, x1, list) {
+  const cuts = [];
+  let prev = null;
+  for (let x = x0; x < x1 + 1;) {
+    const w = 0.35 + rng() * 0.45;
+    prev = pickW(list, rng, prev);
+    cuts.push([x + w, prev]);
+    x += w;
+  }
+  return (x) => {
+    for (const [e, c] of cuts) if (x < e) return c;
+    return cuts[cuts.length - 1][1];
+  };
+}
+
+// Flowers are cheap on purpose (hundreds of them are baked): open 3-sided stems and
+// leaves, a 5-sided lathe cup, and flat 5-sided discs for petals.  All of them go to the
+// double-sided 'vc2' bucket so the open cups and discs read from any angle.
+const FL = { no: true, cast: false };
 
 function tulip(kit, x, y, z, color, rng) {
-  const h = 0.22 + rng() * 0.1, lean = (rng() - 0.5) * 0.2;
-  kit.push(kit.mtx(x, y, z, lean, rng() * 6.28, (rng() - 0.5) * 0.2));
-  kit.cyl(0.005, 0.006, h, 0, 0, 0, 'vc', '#6f9a58', { seg: 4, no: true, cast: false });
-  for (const a of [0, 2.4]) kit.sphere(0.03, Math.cos(a) * 0.02, 0.07, Math.sin(a) * 0.02, 'vc', '#7fa865', { sx: 0.35, sy: 2.4, sz: 1, ry: a, rz: 0.25, ws: 6, hs: 4, no: true, cast: false });
-  kit.lathe([[0, 0], [0.022, 0.005], [0.032, 0.03], [0.031, 0.062], [0.021, 0.08], [0.025, 0.084]], 0, h, 0, 'vc', color, { seg: 6, no: true, cast: false });
+  const h = 0.2 + rng() * 0.12, lean = (rng() - 0.5) * 0.28;
+  kit.push(kit.mtx(x, y, z, lean, rng() * 6.28, (rng() - 0.5) * 0.28));
+  kit.cyl(0.005, 0.006, h, 0, 0, 0, 'vc2', '#6f9a58', { ...FL, seg: 3, open: true });
+  // two strap leaves: flattened open 3-sided cones leaning out from the stem
+  for (const a of [0, 2.6]) {
+    const L = 0.1 + rng() * 0.05;
+    const g = new THREE.CylinderGeometry(0, 0.02, L, 3, 1, true).translate(0, L / 2, 0);
+    kit.add(g, 'vc2', '#7fa865', { ...FL, m: kit.mtx(Math.cos(a) * 0.01, 0, Math.sin(a) * 0.01, 0, a, 0.25, 1, 1, 0.3) });
+  }
+  kit.lathe([[0.004, 0], [0.024, 0.012], [0.031, 0.045], [0.022, 0.074]], 0, h - 0.004, 0, 'vc2', color, { ...FL, seg: 5 });
   kit.pop();
 }
 
-function pansy(kit, x, y, z, cols, rng) {
-  kit.push(kit.mtx(x, y, z, -0.45 - rng() * 0.3, rng() * 6.28, 0, 1.25));
-  kit.sphere(0.065, 0, -0.015, 0, 'vc', '#6f9a58', { sy: 0.45, ws: 7, hs: 4, no: true, cast: false });
-  // five round petals: two upper (darker), three lower with a face blotch
+function pansy(kit, x, y, z, cols, rng, face = 0) {
+  kit.push(kit.mtx(x, y, z, 0, face));
+  // leaf rosette: a flattened icosahedron (20 triangles)
+  kit.add(new THREE.IcosahedronGeometry(0.06, 0), 'vc2', LEAF[Math.floor(rng() * LEAF.length)], { ...FL, m: kit.mtx(0, 0.01, 0, 0, rng() * 6, 0, 1, 0.45, 1) });
+  // flower face looking up and towards the plaza side (+Z); five round petals, two upper darker
+  kit.push(kit.mtx((rng() - 0.5) * 0.03, 0.035, 0.015, -0.85 - rng() * 0.35, (rng() - 0.5) * 0.9, 0));
   for (let i = 0; i < 5; i++) {
     const a = (i / 5) * Math.PI * 2 + 0.3;
-    kit.cyl(0.024, 0.024, 0.008, Math.cos(a) * 0.022, 0.03, Math.sin(a) * 0.022, 'vc', i < 2 ? cols[1] : cols[0], { seg: 6, no: true, cast: false });
+    kit.add(new THREE.CircleGeometry(0.022, 5), 'vc2', i < 2 ? cols[1] : cols[0], { ...FL, m: kit.mtx(Math.cos(a) * 0.02, Math.sin(a) * 0.02, i * 0.0015) });
   }
-  kit.cyl(0.018, 0.018, 0.01, 0, 0.034, 0.004, 'vc', cols[1], { seg: 6, no: true, cast: false });
-  kit.cyl(0.006, 0.006, 0.012, 0, 0.036, 0.004, 'vc', '#f2d45a', { seg: 4, no: true, cast: false });
+  kit.add(new THREE.CircleGeometry(0.014, 5), 'vc2', cols[1], { ...FL, m: kit.mtx(0, -0.004, 0.009) });
+  kit.add(new THREE.CircleGeometry(0.005, 4), 'vc2', '#f2d45a', { ...FL, m: kit.mtx(0, 0, 0.011) });
+  kit.pop();
   kit.pop();
 }
 
 function daisy(kit, x, y, z, rng) {
-  const h = 0.1 + rng() * 0.08;
-  kit.cyl(0.003, 0.003, h, x, y, z, 'vc', '#7fa865', { seg: 3, no: true, cast: false });
-  kit.cyl(0.022, 0.02, 0.006, x, y + h, z, 'vc', '#ffffff', { seg: 8, no: true, cast: false, rx: (rng() - 0.5) * 0.4 });
-  kit.cyl(0.008, 0.008, 0.01, x, y + h + 0.002, z, 'vc', '#f2c230', { seg: 5, no: true, cast: false });
+  const h = 0.1 + rng() * 0.1;
+  kit.cyl(0.003, 0.003, h, x, y, z, 'vc2', '#7fa865', { ...FL, seg: 3, open: true });
+  const m = kit.mtx(x, y + h, z, -Math.PI / 2 + (rng() - 0.5) * 0.6, rng() * 6.28);
+  kit.add(new THREE.CircleGeometry(0.022, 8), 'vc2', '#fbfaf4', { ...FL, m });
+  kit.add(new THREE.CircleGeometry(0.008, 5).translate(0, 0, 0.002), 'vc2', '#f2c230', { ...FL, m });
+}
+
+/** Low leafy ground cover so no bare soil shows between the flowers. */
+function groundCover(kit, rng, x0, x1, z0, z1, y, n) {
+  for (let i = 0; i < n; i++) {
+    const r = 0.07 + rng() * 0.06;
+    kit.add(new THREE.IcosahedronGeometry(r, 0), 'vc', LEAF[Math.floor(rng() * LEAF.length)], { ...FL, m: kit.mtx(x0 + rng() * (x1 - x0), y, z0 + rng() * (z1 - z0), 0, rng() * 6, 0, 1, 0.4, 1) });
+  }
 }
 
 export function shrub(kit, x, y, z, r, rng, blossom) {
@@ -354,14 +412,17 @@ export function shrub(kit, x, y, z, r, rng, blossom) {
   }
 }
 
+/** Brick kerb tints: faded, slightly uneven (multiplies the muted brick texture). */
+const BRICK_TINT = ['#ffffff', '#f6eee8', '#fbf4ee', '#efe6e0', '#fff8f2'];
+
 function flowerBeds(kit, rng) {
   const s = PS();
   PLAZA.flowerBeds.forEach((b, bi) => {
     const brick = bi < 2;
     const kh = 0.36, kt = 0.14;
     kit.push(kit.mtx(b.x, s, b.z));
-    // kerb (four walls) + coping
-    // kerb walls are split into ~0.9 m blocks so the brick / stone texture keeps a real-world scale
+    // kerb (four walls) + coping.  Walls are split into ~0.9 m blocks so the brick / stone
+    // texture keeps a real-world scale; each block gets its own faint tint.
     const wall = (w, d, x, z) => {
       const along = w >= d ? 'x' : 'z';
       const L = Math.max(w, d);
@@ -370,46 +431,85 @@ function flowerBeds(kit, rng) {
         const c = -L / 2 + (i + 0.5) * (L / n);
         const bx = along === 'x' ? x + c : x, bz = along === 'x' ? z : z + c;
         const bw = along === 'x' ? L / n : w, bd = along === 'x' ? d : L / n;
-        if (brick) kit.box(bw, kh, bd, bx, 0, bz, 'texS', '#ffffff', { bottom: true, region: kit.S('brick'), ry: 0 });
+        if (brick) kit.box(bw, kh, bd, bx, 0, bz, 'texS', BRICK_TINT[Math.floor(rng() * BRICK_TINT.length)], { bottom: true, region: kit.S('brick') });
         else kit.box(bw, kh, bd, bx, 0, bz, 'texS', '#e4e2dc', { bottom: true, region: kit.S('stone') });
       }
-      kit.box(w + 0.02, 0.03, d + 0.02, x, kh, z, 'vc', brick ? '#d9d2c4' : '#d4d2cc', { bottom: true });
+      kit.box(w + 0.02, 0.03, d + 0.02, x, kh, z, 'vc', brick ? '#dcd6ca' : '#d4d2cc', { bottom: true });
     };
     wall(b.w, kt, 0, b.d / 2 - kt / 2);
     wall(b.w, kt, 0, -b.d / 2 + kt / 2);
     wall(kt, b.d - kt * 2, b.w / 2 - kt / 2, 0);
     wall(kt, b.d - kt * 2, -b.w / 2 + kt / 2, 0);
-    // soil
     // soil heaped almost to the coping so low pansies stay visible over the kerb
     kit.box(b.w - kt * 2, 0.06, b.d - kt * 2, 0, kh - 0.065, 0, 'vc', '#7a5f48', { bottom: true, cast: false });
     const sy = kh - 0.005;
-    const ix = b.w / 2 - kt - 0.08, iz = b.d / 2 - kt - 0.08;
-    if (b.w > b.d) {
-      // long beds: shrubs at the ends, tulip rows in the middle, pansies + daisies along the front
-      shrub(kit, -ix + 0.12, sy, 0, 0.3, rng, '#f58fae');
-      shrub(kit, ix - 0.12, sy, 0, 0.28, rng, null);
-      const nx = Math.floor((ix * 2 - 0.7) / 0.1);
-      for (let i = 0; i < nx; i++) {
-        const x = -ix + 0.35 + i * 0.1 + (rng() - 0.5) * 0.03;
-        const band = Math.floor(i / 7) % TULIP.length;
-        for (const z of [-0.3, -0.17, -0.04, 0.09]) if (rng() < 0.9) tulip(kit, x + (rng() - 0.5) * 0.04, sy, z + (rng() - 0.5) * 0.05, TULIP[(band + bi * 2) % TULIP.length], rng);
-        if (rng() < 0.9) pansy(kit, x + 0.03, sy, iz - 0.08, PANSY[Math.floor(i / 3 + bi) % PANSY.length], rng);
-        if (rng() < 0.6) pansy(kit, x - 0.03, sy, iz - 0.2, PANSY[Math.floor(i / 3 + bi + 1) % PANSY.length], rng);
-        if (rng() < 0.4) daisy(kit, x, sy, -iz + 0.06, rng);
-      }
-    } else {
-      // narrow bed along z: low shrubs with pansy / daisy pockets
-      for (let z = -iz + 0.3; z < iz - 0.2; z += 0.9) shrub(kit, 0, sy, z, 0.28 + rng() * 0.06, rng, rng() < 0.5 ? '#ffffff' : null);
-      for (let z = -iz + 0.1; z < iz; z += 0.12) {
-        pansy(kit, -ix + 0.08, sy, z, PANSY[Math.floor(z * 2 + 10) % PANSY.length], rng);
-        if (rng() < 0.6) daisy(kit, ix - 0.06, sy, z, rng);
-      }
-    }
+    const ix = b.w / 2 - kt - 0.06, iz = b.d / 2 - kt - 0.06;
+    if (b.w > b.d) longBed(kit, rng, ix, iz, sy, bi);
+    else narrowBed(kit, rng, ix, iz, sy);
     // a few petals on the soil / coping
     petals(kit, rng, 40, -b.w / 2 + kt, b.w / 2 - kt, -b.d / 2 + kt, b.d / 2 - kt, sy + 0.004);
     kit.collide(b.w, b.d);
     kit.pop();
   });
+}
+
+/**
+ * Long bed seen from the plaza (+Z = front): shrubs spread along the back half, three
+ * staggered tulip rows in colour drifts, two rows of pansies in front, daisies tucked in
+ * at the back and in the gaps, leafy ground cover under everything.
+ */
+function longBed(kit, rng, ix, iz, sy, bi) {
+  // shrubs every ~2.3 m (azalea in bloom / plain boxwood alternating), jittered
+  const nS = Math.max(2, Math.round((ix * 2) / 2.3));
+  const shrubs = [];
+  for (let i = 0; i < nS; i++) {
+    const x = -ix + 0.3 + (i / (nS - 1)) * (ix * 2 - 0.6) + (rng() - 0.5) * 0.4;
+    const z = -iz + 0.3 + rng() * 0.15, r = 0.22 + rng() * 0.08;
+    shrub(kit, x, sy, z, r, rng, i % 2 === bi % 2 ? '#f7a9bf' : rng() < 0.5 ? '#fbf6ee' : null);
+    shrubs.push([x, z, r + 0.08]);
+  }
+  const free = (x, z) => shrubs.every(([sx, sz, r]) => Math.hypot(x - sx, z - sz) > r);
+  groundCover(kit, rng, -ix, ix, -iz, iz, sy, Math.round(ix * 2 * 9));
+
+  // tulips: three staggered rows, colour drifts shared across the rows but with ragged edges
+  const colourAt = drifts(rng, -ix, ix, TULIP);
+  const rows = [-0.24, -0.08, 0.08].map((z) => z * (iz / 0.58));
+  rows.forEach((rz, r) => {
+    const step = 0.12;
+    for (let x = -ix + 0.06 + (r % 2) * step / 2; x < ix - 0.04; x += step * (0.85 + rng() * 0.3)) {
+      const px = x + (rng() - 0.5) * 0.04, pz = rz + (rng() - 0.5) * 0.08;
+      if (!free(px, pz) || rng() < 0.08) continue;
+      tulip(kit, px, sy, pz, colourAt(px + (rng() - 0.5) * 0.3 + r * 0.1), rng);
+    }
+  });
+  // pansies: two staggered front rows in small mixed clumps
+  const pansyAt = drifts(rng, -ix, ix, PANSY.map((p) => [p, 1]));
+  for (const [pz, off] of [[iz - 0.07, 0], [iz - 0.2, 0.065]]) {
+    for (let x = -ix + 0.05 + off; x < ix - 0.03; x += 0.13 * (0.85 + rng() * 0.3)) {
+      const px = x + (rng() - 0.5) * 0.03;
+      if (rng() < 0.9) pansy(kit, px, sy, pz + (rng() - 0.5) * 0.04, pansyAt(px + (rng() - 0.5) * 0.2), rng);
+    }
+  }
+  // daisies: along the back kerb and a few among the tulips
+  for (let x = -ix + 0.05; x < ix; x += 0.1 + rng() * 0.12) {
+    const pz = -iz + 0.05 + rng() * 0.12;
+    if (free(x, pz)) daisy(kit, x, sy, pz, rng);
+  }
+  for (let i = 0; i < ix * 4; i++) {
+    const x = -ix + rng() * ix * 2, z = rows[0] + rng() * (rows[2] - rows[0]);
+    if (free(x, z)) daisy(kit, x, sy, z, rng);
+  }
+}
+
+/** Narrow stone-edged bed along z: shrubs down the middle, pansy / daisy edges. */
+function narrowBed(kit, rng, ix, iz, sy) {
+  for (let z = -iz + 0.3; z < iz - 0.2; z += 0.9) shrub(kit, (rng() - 0.5) * 0.15, sy, z, 0.26 + rng() * 0.06, rng, rng() < 0.5 ? '#fbf6ee' : null);
+  groundCover(kit, rng, -ix, ix, -iz, iz, sy, Math.round(iz * 2 * 6));
+  const pansyAt = drifts(rng, -iz, iz, PANSY.map((p) => [p, 1]));
+  for (let z = -iz + 0.06; z < iz; z += 0.12 * (0.85 + rng() * 0.3)) {
+    pansy(kit, -ix + 0.07 + (rng() - 0.5) * 0.04, sy, z, pansyAt(z), rng, -Math.PI / 2);
+    if (rng() < 0.55) daisy(kit, ix - 0.06, sy, z + (rng() - 0.5) * 0.05, rng);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -428,11 +528,14 @@ function bollards(kit) {
     kit.pop();
     tops.push(x);
   }
-  // red / white chains between neighbours 4 m apart
+  // red / white chains between neighbours 4 m apart -- except along the bus stop and the
+  // taxi stand, where passengers step off the kerb: those bollards stay bare.
   const chain = kit.S('chain');
+  const boardingX0 = PLAZA.busStop.x - 3, boardingX1 = PLAZA.taxiSign.x + 3;
   for (let i = 0; i < tops.length - 1; i++) {
     const a = tops[i], b = tops[i + 1];
     if (b - a > 4.5) continue;
+    if (b > boardingX0 && a < boardingX1) continue;
     const n = Math.round((b - a - 0.16) / 0.22);
     const x0 = a + 0.08, x1 = b - 0.08;
     for (let k = 0; k < n; k++) {
@@ -469,7 +572,7 @@ function toilet(kit) {
   const W = 4.4, D = 3.0, H = 2.75;
   const cx = 27.0, cz = -20.0;
   kit.push(kit.mtx(cx, s, cz, 0, -Math.PI / 2));
-  const wall = '#f4f2ec';
+  const wall = '#ece8e0'; // light warm grey so the big wall recedes behind the plaza
   // walls (split so doorways read as openings)
   kit.box(W, 0.3, D, 0, 0, 0, 'vc', '#9aa0a6', { bottom: true }); // tiled plinth band
   kit.box(W - 0.02, H - 0.3, D - 0.02, 0, 0.3, -0.05, 'vc', wall, { bottom: true });
@@ -505,6 +608,11 @@ function toilet(kit) {
       for (let k = 0; k < 4; k++) kit.box(0.05, 0.03, 0.74, sx * (W / 2 + 0.01), 1.92 + k * 0.08, -0.5 + i * 1.0, 'vc', '#c9ccd0', { no: true, cast: false });
     }
   }
+  // hand-painted weathering (splash band, rain streaks) on the back and side walls
+  const stains = kit.V('wallStains');
+  const WH = H - 0.3, wy = 0.3 + WH / 2;
+  kit.plane(W - 0.04, WH, 0, wy, -D / 2 - 0.046, 'texV', wall, { region: stains, ry: Math.PI });
+  for (const sx of [-1, 1]) kit.plane(D - 0.04, WH, sx * (W / 2 - 0.004), wy, -0.05, 'texV', wall, { region: stains, ry: sx * Math.PI / 2, uvOpts: { flipU: sx < 0 } });
   // back wall (faces the crossing road): a children's mural in a thin frame + a downpipe
   const bz = -D / 2 - 0.05;
   kit.box(3.3, 1.22, 0.03, 0, 1.28, bz - 0.005, 'vc', '#e2ded4', { cast: false });
@@ -513,6 +621,26 @@ function toilet(kit) {
   kit.box(0.12, 0.08, 0.12, -W / 2 + 0.12, H - 0.08, bz - 0.04, 'metal', '#b9bec4');
   kit.cyl(0.06, 0.06, 0.5, 1.4, H + 0.26, -0.8, 'metal', '#9aa1a8', { seg: 8 });
   kit.cyl(0.1, 0.1, 0.06, 1.4, H + 0.76, -0.8, 'metal', '#9aa1a8', { seg: 8 });
+  // planter strip with weeds along the foot of the back wall + a garden tap and hose reel
+  {
+    const pz = bz - 0.14, rng = kit.ctx.rng(2718);
+    kit.box(3.4, 0.22, 0.22, 0.35, 0, pz, 'texS', '#e4e2dc', { bottom: true, region: kit.S('stone') });
+    kit.box(3.32, 0.04, 0.16, 0.35, 0.17, pz, 'vc', '#6e5a46', { bottom: true, cast: false, no: true });
+    groundCover(kit, rng, -1.25, 1.95, pz - 0.06, pz + 0.06, 0.21, 22);
+    for (let i = 0; i < 26; i++) {
+      // grass / weed blades: open 3-sided cones
+      const L = 0.12 + rng() * 0.2;
+      const g = new THREE.CylinderGeometry(0, 0.015, L, 3, 1, true).translate(0, L / 2, 0);
+      kit.add(g, 'vc2', LEAF[Math.floor(rng() * LEAF.length)], { ...FL, m: kit.mtx(-1.25 + rng() * 3.2, 0.2, pz + (rng() - 0.5) * 0.12, (rng() - 0.5) * 0.6, rng() * 6, (rng() - 0.5) * 0.6) });
+    }
+    for (let i = 0; i < 5; i++) daisy(kit, -1.1 + rng() * 2.9, 0.2, pz + (rng() - 0.5) * 0.1, rng);
+    // tap on a short riser pipe, green hose coiled on a wall reel
+    kit.cyl(0.018, 0.018, 0.5, -1.9, 0, bz - 0.04, 'metal', '#b9bec4', { seg: 6 });
+    kit.box(0.05, 0.05, 0.07, -1.9, 0.5, bz - 0.06, 'metal', '#c9a36a', { no: true });
+    kit.cyl(0.13, 0.13, 0.08, -1.62, 0.62, bz - 0.06, 'vc', '#4f9a62', { rx: Math.PI / 2, center: true, seg: 14 });
+    kit.cyl(0.06, 0.06, 0.1, -1.62, 0.62, bz - 0.06, 'vc', '#3a3e46', { rx: Math.PI / 2, center: true, seg: 8, no: true });
+    kit.curveTube([[-1.62, 0.5, bz - 0.1], [-1.6, 0.2, bz - 0.2], [-1.75, 0.03, bz - 0.28], [-1.97, 0.03, bz - 0.2]], 0.012, 10, 'vc', '#4f9a62', { no: true, cast: false });
+  }
   // outdoor hand-wash basin by the accessible door
   kit.box(0.5, 0.8, 0.4, 2.55, 0, 0.9, 'vc', '#c9ccc8', { bottom: true });
   kit.box(0.44, 0.06, 0.34, 2.55, 0.8, 0.9, 'vc', '#eef0f0', { bottom: true });

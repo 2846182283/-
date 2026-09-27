@@ -8,7 +8,7 @@
  *   dry leaves, tyre marks at the stop line, plaza stains and tree-pit soil.
  */
 import { SPOTS, LOTS, PLAZA, makeRng } from '../../core/layout.js';
-import { LIFT, SF, CR, NR, MS, MS_S0, MS_S1, onRoad, groundY } from './common.js';
+import { LIFT, SF, CR, NR, MS, MS_S0, MS_S1, LANES, onRoad, groundY } from './common.js';
 import { surfaceQuad } from './markings.js';
 import { PLAZA_Y, plazaTrees } from './paving.js';
 
@@ -87,6 +87,7 @@ export function buildDecals(bins, atlas, { grateSpots, hydrants }) {
   straight(SF, SF.from, SF.to, 31);
   straight(CR, -26, 3.4, 32);
   straight(NR, NR.from, NR.to, 33);
+  LANES.forEach((l, i) => straight(l, l.x0, l.x1, 40 + i));
 
   // hydrant lids inside the yellow boxes
   for (const h of hydrants) put('hydrantLid', h.x, h.z, h.dx, h.dz, 0.52, 0.52);

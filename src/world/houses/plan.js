@@ -37,6 +37,14 @@ const pickW = (r, items) => {
   return items[items.length - 1][0];
 };
 
+/**
+ * North row (backs onto the levee): hand-picked characters so the row seen
+ * from the levee path does not repeat one massing rhythm, plus a roof-type
+ * cycle (indexed by lot number) so neighbours never share a roof.
+ */
+const NORTH_SPECIAL = { NR09: 'apartment', NR11: 'oldWing', NR04: 'oldWing' };
+const NORTH_ROOFS = ['gableX', 'hip', 'gableZ', 'shed', 'hip', 'gableX', 'gableZ', 'hip', 'shed', 'gableX'];
+
 /** Detail level for a lot. */
 export function lodFor(lot) {
   if (lot.simple) return 'simple';
@@ -53,19 +61,25 @@ export function makePlan(lot) {
   const W = lot.width, D = lot.depth;
   const floors = lot.floors;
   const c = Math.cos(lot.rotY), s = Math.sin(lot.rotY);
+  const north = lot.street === 'north';
+  const special = north ? NORTH_SPECIAL[lot.id] || null : null;
   const plan = {
-    lot, lod, W, D, floors, r,
+    lot, lod, W, D, floors, r, special,
+    apartment: special === 'apartment',
     seed: lot.seed,
     /** ground height (lot-local y) under lot-local (lx, lz) */
     gy: (lx, lz) => groundY(lot.x + lx * c + lz * s, lot.z - lx * s + lz * c) - lot.y,
   };
 
   // --- style ----------------------------------------------------------------
-  const finish1 = pickW(r, [['plaster', 4], ['siding', 4], ['tile', 1.6], ['wood', 1.2]]);
+  let finish1 = pickW(r, [['plaster', 4], ['siding', 4], ['tile', 1.6], ['wood', 1.2]]);
+  if (special === 'apartment') finish1 = 'siding';
+  if (special === 'oldWing') finish1 = 'wood';
   let finish2 = finish1;
   if (floors === 2 && r() < 0.28) finish2 = finish1 === 'tile' ? 'siding' : finish1 === 'wood' ? 'plaster' : r() < 0.5 ? 'plaster' : 'siding';
   if (finish1 === 'wood' && r() < 0.5) finish2 = 'plaster'; // classic dark boards below, plaster above
   plan.trad = finish1 === 'wood' || (finish1 === 'plaster' && r() < 0.35) || (floors === 1 && r() < 0.6);
+  if (plan.apartment) { plan.trad = false; finish2 = 'siding'; }
   const col1 = r.pick(FINISHES[finish1]);
   const col2 = finish2 === finish1 ? col1 : r.pick(FINISHES[finish2]);
   plan.zones = [
@@ -91,18 +105,29 @@ export function makePlan(lot) {
   const bz0 = -D / 2 + backM;
   let bz1 = D / 2 - 0.12;
   let massing = 'box';
-  if (lod !== 'simple') {
+  if (special === 'oldWing' && floors === 2 && W >= 8.4) massing = 'wing';
+  else if (plan.apartment) massing = 'apartment';
+  else if (lod !== 'simple') {
     if (floors === 2 && W >= 8.4 && r() < 0.38) massing = 'wing';
     else if (D >= 10 && r() < (floors === 1 ? 0.6 : 0.22)) massing = 'yard';
   }
   plan.massing = massing;
-  const wallTop = (fl) => FOUND + fl * STOREY + 0.08;
+  // north row: eave heights wander a little so the levee-side skyline is not ruler-straight
+  const topJ = north ? r.range(-0.04, 0.32) : 0;
+  const wallTop = (fl) => FOUND + fl * STOREY + 0.08 + topJ;
   const blocks = [];
   let roofType;
   const kawaraP = plan.trad ? 0.92 : 0.55;
   if (floors === 1) roofType = pickW(r, [['hip', 5], ['gableX', 4], ['gableZ', 1]]);
   else roofType = pickW(r, [['gableX', 3.4], ['gableZ', 2.0], ['hip', 3.2], ['shed', lod === 'simple' ? 0.6 : 1.4]]);
-  const mat = roofType === 'shed' ? 'metal' : r() < kawaraP ? 'kawara' : 'metal';
+  if (north && !special) {
+    const k = parseInt(lot.id.slice(2), 10) || 0;
+    roofType = NORTH_ROOFS[k % NORTH_ROOFS.length];
+    if (floors === 1 && roofType === 'shed') roofType = 'hip';
+  }
+  if (special === 'oldWing') roofType = 'gableX';
+  let mat = roofType === 'shed' ? 'metal' : r() < kawaraP ? 'kawara' : 'metal';
+  if (special === 'oldWing') mat = 'kawara';
   const roof = {
     type: roofType,
     mat,
@@ -113,16 +138,21 @@ export function makePlan(lot) {
     shedDir: r() < 0.5 ? 1 : -1, // +1: high side at the back (slopes down to the street)
   };
   if (massing === 'yard') bz1 = D / 2 - r.range(1.9, 2.7);
+  if (massing === 'apartment') {
+    // アパート: flat roof behind a parapet, front yard for the outside stair
+    bz1 = D / 2 - 2.5;
+    blocks.push({ id: 'main', x0: bx0, x1: bx1, z0: bz0, z1: bz1, floors: 2, top: wallTop(2) + 0.25, roof: { type: 'flat', mat: 'metal', color: '#a9adb0', parapet: true } });
+  }
   if (massing === 'wing') {
     const wingW = Math.min(3.0, Math.max(2.2, (bx1 - bx0) * r.range(0.26, 0.34)));
     const mainX1 = bx1 - wingW;
     blocks.push({ id: 'main', x0: bx0, x1: mainX1, z0: bz0, z1: bz1, floors: 2, top: wallTop(2), roof });
     const setBack = r() < 0.5 ? r.range(0.6, 1.4) : 0;
-    const wingRoof = r() < 0.4
+    const wingRoof = r() < 0.4 && special !== 'oldWing'
       ? { type: 'flat', mat: 'metal', color: '#9aa1a8' }
       : { type: 'lean', mat: roof.mat, color: roof.color, pitch: roof.mat === 'kawara' ? 0.42 : 0.3, eave: 0.45, verge: 0.3 };
     blocks.push({ id: 'wing', x0: mainX1, x1: bx1, z0: bz0 + r.range(0.8, 2.2), z1: bz1 - setBack, floors: 1, top: wallTop(1) - 0.1, roof: wingRoof, wing: true });
-  } else {
+  } else if (massing !== 'apartment') {
     blocks.push({ id: 'main', x0: bx0, x1: bx1, z0: bz0, z1: bz1, floors, top: wallTop(floors), roof });
   }
   plan.blocks = blocks;
@@ -160,13 +190,26 @@ export function makePlan(lot) {
   else du = (entryL - doorW) / 2;
   du = Math.max(0.45, Math.min(entryL - 0.45 - doorW, du));
   plan.entry = { facade: entryF, u0: du, u1: du + doorW, y0: FOUND, y1: FOUND + 2.1, type: plan.trad && doorW > 1.3 ? 'lattice' : 'panel', canopy: pickW(r, [['slab', 3], ['hood', 2], ['kawara', plan.trad ? 3 : 0.3], ['none', entryF.block.floors === 2 ? 0.6 : 0]]) };
-  entryF.openings.push({ kind: 'door', u0: du, u1: du + doorW, y0: FOUND, y1: FOUND + 2.1 });
+  if (!plan.apartment) entryF.openings.push({ kind: 'door', u0: du, u1: du + doorW, y0: FOUND, y1: FOUND + 2.1 });
   plan.lampStyle = r.pick(['box', 'globe', 'lantern']);
 
   // --- balcony (2F) ------------------------------------------------------------------
   plan.balcony = null;
-  if (main.floors === 2 && lod !== 'simple') {
-    const faceFront = !(lot.front.dirZ < -0.7 && lot.street === 'stationFront' && r() < 0.6); // north-facing fronts: many at the back
+  plan.balconies = [];
+  if (plan.apartment) {
+    // two units upstairs, each with a balcony on the quiet (levee) side
+    const bf = plan.facade('main', 'back');
+    const half = bf.L / 2;
+    for (let k = 0; k < 2; k++) {
+      plan.balconies.push({
+        facade: bf, u0: k * half + 0.35, u1: (k + 1) * half - 0.35, depth: 0.95,
+        rail: k === 0 ? 'panel' : 'panel', laundry: true, futon: k === 1 && r() < 0.6, dish: k === 0, ac: true,
+      });
+    }
+  } else if (main.floors === 2 && lod !== 'simple' && special !== 'oldWing') {
+    // north-facing fronts: many at the back; the north row hangs some laundry on the levee side too
+    const rearN = north && (lot.seed >>> 3) % 4 === 0;
+    const faceFront = !rearN && !(lot.front.dirZ < -0.7 && lot.street === 'stationFront' && r() < 0.6);
     const bf = plan.facade('main', faceFront ? 'front' : 'back');
     if (r() < 0.72 && bf.L > 4.4) {
       const bw = Math.min(bf.L - 1.0, r.range(2.6, Math.max(2.7, bf.L * 0.75)));
@@ -179,16 +222,19 @@ export function makePlan(lot) {
         dish: r() < 0.3,
         ac: r() < 0.55,
       };
+      if (rearN) plan.balcony.laundry = true;
+      plan.balconies.push(plan.balcony);
     }
   }
+  plan.balcony = plan.balconies[0] || null;
 
   // --- small flags ----------------------------------------------------------------------
-  plan.frontEave = plan.trad && main.floors === 2 && !plan.balcony && r() < 0.6;
+  plan.frontEave = plan.trad && main.floors === 2 && !plan.balcony && (special === 'oldWing' || r() < 0.6);
   plan.antenna = lod === 'simple' ? r() < 0.4 : r() < 0.72;
   plan.dishRoof = !plan.antenna && r() < 0.3;
   plan.fence = pickW(r, [['block', 4], ['lattice', 2], ['mesh', 1.5], ['hedge', 2.2], ['none', 1.2]]);
   plan.fenceH = plan.fence === 'block' ? r.pick([0.8, 1.0, 1.2]) : plan.fence === 'hedge' ? r.range(0.8, 1.1) : r.range(0.9, 1.2);
-  plan.windChime = r() < 0.18;
+  plan.windChime = !plan.apartment && r() < 0.18;
   plan.blockColor = r.pick(['#d6d3cc', '#cfcbc3', '#dcd6ca', '#c9c6be']);
   plan.latticeColor = r.pick(['#8a6446', '#6d5040', '#a07a55', '#5b4332']);
   plan.meshColor = r.pick(['#4d6b55', '#6b7075', '#5a4f48']);

@@ -140,11 +140,56 @@ function trims(kit, sp) {
   }
 }
 
+/**
+ * Kei van panel work: sliding rear-door seams (run up the cargo side), the door's upper
+ * rail running back along the quarter panel, pull handles, fuel lid, side markers, a
+ * rubber side-protector moulding, and the tailgate seams / handle at the back.
+ */
+function vanPanelDetails(kit, sp, cx) {
+  const seam = '#8a8c90', dark = '#3a3e46';
+  const NS = { no: true, cast: false };
+  const L2 = sp.L / 2 + (sp.bevel ?? 0.035);
+  const zF = 0.46, zR = -0.7; // sliding door front / rear edges
+  for (const sx of [-1, 1]) {
+    const xo = sx * (cx + 0.007), xl = sx * (sp.W / 2 + 0.004);
+    // sliding door outline on the cargo panel (the lower part is in trims' seams list)
+    kit.box(0.01, 0.76, 0.012, xo, 1.4, zR, 'vc', seam, NS);
+    kit.box(0.01, 0.76, 0.012, xo, 1.4, zF - 0.02, 'vc', seam, NS);
+    kit.box(0.01, 0.012, zF - zR, xo, 1.77, (zF + zR) / 2, 'vc', seam, NS);
+    // slide rail: a dark slot behind the door along the quarter panel at the window line
+    kit.box(0.014, 0.03, 0.95, sx * (cx + 0.006), 1.08, zR - 0.5, 'vc', dark, NS);
+    kit.box(0.02, 0.012, 0.95, sx * (cx + 0.012), 1.1, zR - 0.5, 'vc', '#c9ccd0', { no: true });
+    // key lock under the sliding door's pull handle
+    kit.cyl(0.012, 0.012, 0.01, xl + sx * 0.004, sp.belt - 0.14, 0.25, 'metal', '#9aa1a8', { rz: Math.PI / 2, center: true, seg: 8, ...NS });
+    // side-protector moulding between the wheel arches (a soft grey strip with its own outline)
+    kit.rbox(0.025, 0.06, 1.7, 0.012, xl + sx * 0.008, 0.66, 0, 'vc', '#b9bcc0');
+    // amber side marker on the front fender
+    kit.rbox(0.02, 0.035, 0.08, 0.008, xl + sx * 0.006, 0.8, 1.3, 'glow', '#ffb04a');
+  }
+  // fuel lid on the left rear quarter (car's left = +X)
+  kit.rbox(0.012, 0.13, 0.15, 0.02, sp.W / 2 + 0.006, 0.78, -1.2, 'vc', '#dedbd0');
+  kit.box(0.01, 0.02, 0.03, sp.W / 2 + 0.013, 0.78, -1.12, 'vc', seam, NS);
+  // tailgate: seams round the hatch, a handle / plate lamp bar under the rear glass
+  const zb = -L2 - 0.004;
+  for (const sx of [-1, 1]) {
+    // the gate cut steps inboard around the tall tail lamps
+    kit.box(0.012, 0.8, 0.01, sx * (sp.W / 2 - 0.12), 1.35, zb + 0.01, 'vc', seam, NS);
+    kit.box(0.012, 0.43, 0.01, sx * (sp.W / 2 - 0.19), 0.735, zb, 'vc', seam, NS);
+    kit.box(0.08, 0.012, 0.01, sx * (sp.W / 2 - 0.155), 0.95, zb, 'vc', seam, NS);
+  }
+  kit.box(sp.W - 0.24, 0.012, 0.01, 0, 1.75, zb + 0.02, 'vc', seam, NS);
+  kit.box(sp.W - 0.38, 0.012, 0.01, 0, 0.52, zb, 'vc', seam, NS);
+  kit.rbox(0.42, 0.06, 0.04, 0.012, 0, 1.08, zb - 0.01, 'metal', '#c9cdd2');
+}
+
 const SPECS = {
   'kei-van-white': () => ({
     L: 3.39, W: 1.47, wheelBase: 2.43, wheelR: 0.28, bottomY: 0.3, belt: 1.02, roofY: 1.84, floorY: 0.5, tumble: 0.05,
-    body: '#f4f4f0', bumper: '#c9ccd0', plate: 'plateVan',
-    upper: [[-1.69, 0.3], [-1.7, 1.02], [-1.68, 1.78], [-1.6, 1.82], [0.47, 1.82], [0.47, 1.02], [1.48, 1.02], [1.62, 0.95], [1.7, 0.62], [1.69, 0.3]],
+    body: '#e9e6dc', bumper: '#c9ccd0', plate: 'plateVan',
+    // lower body up to the belt line; the cargo box above it is a separate, slightly
+    // narrower extrusion (tumblehome) so the outline pass draws a second edge at the belt
+    upper: [[-1.69, 0.3], [-1.7, 1.02], [1.48, 1.02], [1.62, 0.95], [1.7, 0.62], [1.69, 0.3]],
+    cargo: [[-1.7, 1.0], [-1.68, 1.78], [-1.6, 1.82], [0.47, 1.82], [0.47, 1.0]], cargoInset: 0.035,
     glass: [[0.45, 1.0], [0.45, 1.8], [1.02, 1.8], [1.5, 1.0]],
     rearGlass: [[-1.69, 1.18], [-1.69, 1.7]],
     pillars: [[[1.5, 1.02], [1.02, 1.8]], [[0.47, 1.02], [0.47, 1.8]]],
@@ -189,6 +234,7 @@ export function vehicle(kit, kind) {
   const arches = [{ z: sp.wheelBase / 2, r: sp.wheelR + 0.05 }, { z: -sp.wheelBase / 2, r: sp.wheelR + 0.05 }];
   // lower body (+ the van's panel sides) with a soft bevel
   sideExtrude(kit, profileShape(sp.upper, arches, sp.bottomY), sp.W, 'vc', sp.body, sp.bevel ?? 0.035);
+  if (sp.cargo) sideExtrude(kit, polyShape(sp.cargo), sp.W - sp.cargoInset * 2, 'vc', sp.body, 0.035);
   // greenhouse glass (narrower = tumblehome), interior, frame
   sideExtrude(kit, polyShape(sp.glass), sp.W - sp.tumble * 2, 'glassDark', '#ffffff');
   if (sp.rearGlass) kit.plane(sp.W - 0.3, sp.rearGlass[1][1] - sp.rearGlass[0][1], 0, (sp.rearGlass[0][1] + sp.rearGlass[1][1]) / 2, sp.rearGlass[0][0] - 0.012 - (sp.bevel ?? 0.035), 'glassDark', '#ffffff', { ry: Math.PI });
@@ -198,7 +244,9 @@ export function vehicle(kit, kind) {
   trims(kit, sp);
   const S = kit.S;
   if (sp.livery) {
-    for (const sx of [-1, 1]) kit.plane(2.0, 0.5, sx * (sp.W / 2 + 0.004), 1.38, -0.62, 'texS', '#ffffff', { ry: sx * Math.PI / 2, region: S('vanSide') });
+    const cx = sp.W / 2 - sp.cargoInset; // cargo side panel surface
+    for (const sx of [-1, 1]) kit.plane(2.0, 0.5, sx * (cx + 0.004), 1.42, -0.62, 'texS', '#ffffff', { ry: sx * Math.PI / 2, region: S('vanSide') });
+    vanPanelDetails(kit, sp, cx);
     // roof rack
     for (const z of [-1.4, -0.4]) kit.box(sp.W - 0.2, 0.03, 0.04, 0, sp.roofY + 0.09, z, 'metal', '#3a3e46', { no: true });
     for (const sx of [-1, 1]) kit.box(0.04, 0.05, 1.3, sx * (sp.W / 2 - 0.12), sp.roofY + 0.1, -0.9, 'metal', '#3a3e46');

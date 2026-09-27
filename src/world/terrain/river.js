@@ -98,12 +98,13 @@ function waterShader(sunDir) {
           float sunR = pow( max( dot( R, normalize( uSun ) ), 0.0 ), 5.0 );
           vec2 g = vWWorld.xz * vec2( 1.3, 3.2 ) + vec2( -toonTime * 0.5, 0.0 );
           vec2 gi = floor( g );
-          vec2 gf = fract( g ) - 0.5;
           float gh = wHash( gi );
+          // jitter each dash inside its cell so the glints don't line up in rows
+          vec2 gf = fract( g ) - 0.5 - ( vec2( wHash( gi + 3.7 ), wHash( gi + 9.1 ) ) - 0.5 ) * vec2( 0.4, 0.6 );
           float tw = 0.5 + 0.5 * sin( toonTime * ( 2.0 + gh * 4.0 ) + gh * 30.0 );
           float dash = ( 1.0 - smoothstep( 0.18, 0.3, abs( gf.x ) ) ) * ( 1.0 - smoothstep( 0.05, 0.12, abs( gf.y ) ) );
           float glint = dash * step( 0.88, gh ) * tw;
-          totalEmissiveRadiance += vec3( 1.0, 0.95, 0.82 ) * glint * ( 0.25 + 1.6 * sunR );
+          totalEmissiveRadiance += vec3( 1.0, 0.95, 0.82 ) * glint * ( 0.04 + 1.8 * smoothstep( 0.15, 0.6, sunR ) ); // only on the sun side
         }`);
   };
 }

@@ -22,6 +22,7 @@
 import * as THREE from 'three';
 import { GeoBuilder, roadY } from './terrain/common.js';
 import * as TX from './terrain/textures.js';
+import { markingsAtlas, decalAtlas } from './terrain/atlases.js';
 import { buildGround } from './terrain/ground.js';
 import { buildRoads } from './terrain/roads.js';
 import { buildPaving } from './terrain/paving.js';
@@ -66,8 +67,8 @@ export default async function build(ctx) {
     gutter: TX.gutterTexture(),
     tactile: TX.tactileTexture(),
   };
-  const marksAtlas = TX.markingsAtlas(MARK_WHITE_CHARS, MARK_YELLOW_CHARS);
-  const decalAtlas = TX.decalAtlas();
+  const marksAtlas = markingsAtlas(MARK_WHITE_CHARS, MARK_YELLOW_CHARS);
+  const decAtlas = decalAtlas();
 
   // ---- materials (cached by toon; one per surface family) ---------------------
   const M = {
@@ -79,7 +80,7 @@ export default async function build(ctx) {
     tactile: toon.mat('#ffffff', { map: tex.tactile, vertexColors: true, name: 'terrainTactile' }),
     gutter: toon.mat('#ffffff', { map: tex.gutter, name: 'terrainGutter' }),
     marks: toon.mat('#ffffff', { map: marksAtlas.texture, vertexColors: true, transparent: true, depthWrite: false, polygonOffset: 2, name: 'terrainMarks' }),
-    decals: toon.mat('#ffffff', { map: decalAtlas.texture, vertexColors: true, transparent: true, depthWrite: false, polygonOffset: 1, name: 'terrainDecals' }),
+    decals: toon.mat('#ffffff', { map: decAtlas.texture, vertexColors: true, transparent: true, depthWrite: false, polygonOffset: 1, name: 'terrainDecals' }),
   };
   M.concreteRaised = M.concrete;
 
@@ -91,7 +92,7 @@ export default async function build(ctx) {
   const gutters = buildGutters(ctx, bins, M.gutter);
   gutters.meshes.forEach((m) => root.add(m));
   const marks = buildMarkings(bins, marksAtlas, paving.konbini);
-  buildDecals(bins, decalAtlas, { grateSpots: gutters.grateSpots, hydrants: marks.hydrants });
+  buildDecals(bins, decAtlas, { grateSpots: gutters.grateSpots, hydrants: marks.hydrants });
   const paths = buildPaths(ctx, bins);
   root.add(ctx.geom.bakeStatic(paths.rail, { name: 'terrain:handrail' }));
   buildRiver(ctx, bins, tex).forEach((m) => root.add(m));

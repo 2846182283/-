@@ -9,14 +9,14 @@
  *     along the fences
  */
 import * as THREE from 'three';
-import { TERRAIN, RAIL, PLATFORM, TREES, groundY } from '../../core/layout.js';
+import { TERRAIN, RAIL, PLATFORM, TREES, groundY, smoothstep } from '../../core/layout.js';
 import { LIFT, LP, NR, CR, addSlab, fbm, lin, mixLin } from './common.js';
 
 const GRAVEL_UV = 1 / 3;
 const EDGE_GREEN = lin('#b6c98f');
 
 /** Straight gravel strip along x (z0..z1 across) with worn tracks + grassy edges. */
-function gravelStripX(b, x0, x1, z0, z1, yFn, { tracks = [], step = 2, seed = 1 } = {}) {
+export function gravelStripX(b, x0, x1, z0, z1, yFn, { tracks = [], step = 2, seed = 1, fade = null } = {}) {
   const D = [0, 0.12, 0.3];
   for (const t of tracks) D.push(t - 0.18, t, t + 0.18);
   const w = z1 - z0;
@@ -28,7 +28,9 @@ function gravelStripX(b, x0, x1, z0, z1, yFn, { tracks = [], step = 2, seed = 1 
     const d = Ds[i];
     const z = z0 + d;
     const edge = Math.min(d, w - d);
-    const g = Math.max(0, 1 - edge / 0.3) * (0.55 + 0.45 * fbm(x * 0.3, z, seed, 2));
+    let g = Math.max(0, 1 - edge / 0.3) * (0.55 + 0.45 * fbm(x * 0.3, z, seed, 2));
+    // fade = [xa, xb]: the path peters out into grass towards xb
+    if (fade) g = Math.max(g, smoothstep(fade[0], fade[1], x) * (0.75 + 0.25 * fbm(x * 0.5, z * 2, seed + 3, 2)));
     let c = [1, 1, 1];
     for (const t of tracks) if (Math.abs(d - t) < 0.1) c = [1.07, 1.06, 1.04];
     const k = 0.95 + 0.1 * fbm(x * 0.05, z * 0.2, seed + 1, 2);
@@ -113,6 +115,8 @@ function troughX(bins, x0, x1, z) {
   }
 }
 
+export { GRAVEL_UV, EDGE_GREEN };
+
 export function buildPaths(ctx, bins) {
   const g = bins.get('gravel');
   const T = TERRAIN;
@@ -151,8 +155,14 @@ export function buildPaths(ctx, bins) {
   }
 
   // monthly gravel car park west of the footpath
-  const pk = { x0: 17.2, x1: sx - 1.3, z0: -60.6, z1: zRoad };
-  gravelStripX(g, pk.x0, pk.x1, pk.z0, pk.z1, (x, z) => groundY(x, z) + LIFT.path, { tracks: [3.2, 7.3], step: 2, seed: 8 });
+  // (starts clear of the north-row garden trees: layout keeps ~2.5 m around each)
+  let pkX0 = 17.2;
+  for (const t of TREES) {
+    if (t.far || t.z > zRoad || t.z < -61) continue;
+    if (t.x > pkX0 - 2.8 && t.x < sx - 1.3) pkX0 = Math.max(pkX0, t.x + 2.8);
+  }
+  const pk = { x0: pkX0, x1: sx - 1.3, z0: -60.6, z1: zRoad };
+  gravelStripX(g, pk.x0, pk.x1, pk.z0, pk.z1, (x, z) => groundY(x, z) + LIFT.path, { tracks: [2.6, 6.2], step: 2, seed: 8 });
   // concrete wheel stops (車止め) at the back of each bay
   const cr = bins.get('concreteRaised');
   const bays = [];

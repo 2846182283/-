@@ -3,14 +3,14 @@
  * furniture of Japanese streets:
  *   white edge lines, the orange centre line of the station-front road,
  *   zebra crossings, stop lines, 止まれ / スピード落とせ / 通学路 / 踏切注意
- *   (characters stretched ~1.6x along the travel direction, first character
+ *   (characters ~2.5x longer than wide along the travel direction, first character
  *   nearest the reader), ◇ crossing-ahead diamond, bicycle navigation marks,
  *   pedestrian pictogram, green school-route shoulders, yellow 消火栓 boxes,
  *   a yellow バス stop marking and bicycle-parking lines on the konbini forecourt.
  * All paint is one mesh (atlas texture, transparent, polygon offset, noOutline).
  */
 import { ROAD_MARKINGS, PLAZA } from '../../core/layout.js';
-import { LIFT, SF, CR, NR, MS, MS_S0, MS_S1, CR_SEGMENTS, cornerById, straightPoint, groundY, hash2 } from './common.js';
+import { LIFT, SF, CR, NR, MS, MS_S0, MS_S1, LANES, CR_SEGMENTS, cornerById, straightPoint, groundY, hash2 } from './common.js';
 import { ZEBRA_SF, KONBINI_LIFT } from './paving.js';
 
 export const MARK_WHITE_CHARS = [...new Set('止まれスピード落とせ通学路踏切注意')];
@@ -39,6 +39,7 @@ export function surfaceQuad(b, x, z, dx, dz, len, wid, uv, yFn, color = PAINT_TI
 // ---------------------------------------------------------------------------
 /** Returns {x, z, tx, tz, nx, nz}: t along the street (+z for main/crossing, +x for station-front), n = lateral +. */
 function frameOf(street, along, lateral) {
+  if (typeof street === 'object') return { x: along, z: street.z + lateral, tx: 1, tz: 0, nx: 0, nz: 1 }; // lane (axis x)
   if (street === 'main') {
     const f = MS.atZ(along);
     return { x: f.x + f.nx * lateral, z: f.z + f.nz * lateral, tx: f.tx, tz: f.tz, nx: f.nx, nz: f.nz };
@@ -86,8 +87,9 @@ function lineAlong(b, atlas, street, a0, a1, lateral, width, cellName = 'white',
 }
 
 /** Line along the main street by arc length (for the curved edge lines / green shoulders). */
-function mainLine(b, atlas, s0, s1, lateral, width, cellName = 'white', yFn = roadMarkY) {
+function mainLine(b, atlas, s0, s1, lateral, width, cellName = 'white', yFn = roadMarkY, skip = null) {
   for (let s = s0; s < s1 - 0.05; s += 1.0) {
+    if (skip && skip(s)) continue;
     const e = Math.min(s1, s + 1.0);
     const fa = MS.atS(s), fe = MS.atS(e), fm = MS.atS((s + e) / 2);
     const ax = fa.x + fa.nx * lateral, az = fa.z + fa.nz * lateral;
@@ -164,6 +166,47 @@ function hydrantBox(b, atlas, street, along, lateral, readFrom) {
   return { x: f.x + dx * a, z: f.z + dz * a, dx, dz };
 }
 
+/**
+ * Road-text sizes (metres).  Characters are ~2.5x longer than wide, like real
+ * Japanese road text, which reads correctly foreshortened from a driver's eye.
+ */
+const TEXT_SIZE = {
+  tomare: { cw: 0.95, cl: 2.5, gap: 0.4 },
+  tomareNarrow: { cw: 0.85, cl: 2.1, gap: 0.3 }, // crossing road (2.75 m lanes, tight run-up)
+  phrase: { cw: 0.9, cl: 2.2, gap: 0.35 },
+  narrow: { cw: 0.85, cl: 2.0, gap: 0.35 },
+  long: { cw: 0.9, cl: 1.9, gap: 0.3 },
+};
+const textLength = (text, o) => [...text].length * o.cl + ([...text].length - 1) * o.gap;
+
+/**
+ * Centre coordinate for a road text so it never overlaps the stop line / the
+ * text in front of it: 止まれ ends 0.6 m before its stop line, 踏切注意 keeps
+ * 1.2 m clear of the 止まれ ahead of it.  Returns the "along" coordinate.
+ */
+function textCentre(m, text, o) {
+  const along = m.street === 'stationFront' ? m.x : m.z;
+  const L = textLength(text, o);
+  const sign = { south: -1, north: 1, west: 1, east: -1 }[m.readFrom] ?? 1; // travel direction along +t
+  // the text's far end (towards the travel direction) must stay behind `limit`
+  let limit = null;
+  for (const o2 of ROAD_MARKINGS) {
+    if (o2 === m || o2.street !== m.street || o2.lateral === undefined || Math.sign(o2.lateral) !== Math.sign(m.lateral)) continue;
+    const a2 = o2.street === 'stationFront' ? o2.x : o2.z;
+    const ahead = (a2 - along) * sign; // > 0: lies ahead of the reader
+    let reach = null;
+    if (o2.type === 'stopLine' && ahead > -3) reach = a2 - sign * 0.6;
+    else if (o2.type === 'tomare' && ahead > 0 && ahead < 14) {
+      const L2 = textLength('止まれ', o2.street === 'crossing' ? TEXT_SIZE.tomareNarrow : TEXT_SIZE.tomare);
+      reach = textCentre(o2, '止まれ', o2.street === 'crossing' ? TEXT_SIZE.tomareNarrow : TEXT_SIZE.tomare) - sign * (L2 / 2 + 1.2);
+    }
+    if (reach !== null && (limit === null || (reach - limit) * sign < 0)) limit = reach;
+  }
+  if (limit === null) return along;
+  const far = along + sign * L / 2;
+  return (far - limit) * sign > 0 ? limit - sign * L / 2 : along;
+}
+
 export function buildMarkings(bins, atlas, konbini) {
   const b = bins.get('marks');
   const hydrants = [];
@@ -177,15 +220,16 @@ export function buildMarkings(bins, atlas, konbini) {
       stopLine(b, atlas, m.street, along, m.lateral, m.width);
     } else if (m.type === 'tomare') {
       if (m.street === 'crossing' && m.z < -40) {
-        // squeezed between the stop line and the north-road junction
-        roadText(b, atlas, '止まれ', 'crossing', -44.35, m.lateral, m.readFrom, { cw: 1.0, cl: 1.05, gap: 0.2 });
+        // squeezed between the stop line and the north-road junction (only ~1.9 m available)
+        roadText(b, atlas, '止まれ', 'crossing', -44.35, m.lateral, m.readFrom, { cw: 0.85, cl: 1.05, gap: 0.2 });
       } else {
-        roadText(b, atlas, '止まれ', m.street, along, m.lateral, m.readFrom, { cw: m.street === 'crossing' ? 1.05 : 1.2, cl: 1.6, gap: 0.3 });
+        const opt = m.street === 'crossing' ? TEXT_SIZE.tomareNarrow : TEXT_SIZE.tomare;
+        roadText(b, atlas, '止まれ', m.street, textCentre(m, '止まれ', opt), m.lateral, m.readFrom, opt);
       }
     } else if (m.type === 'text') {
       const n = [...m.text].length;
-      const opt = n > 4 ? { cw: 1.0, cl: 1.45, gap: 0.22 } : { cw: m.street === 'crossing' ? 1.0 : 1.15, cl: 1.7, gap: 0.3 };
-      roadText(b, atlas, m.text, m.street, along, m.lateral, m.readFrom, opt);
+      const opt = n > 4 ? TEXT_SIZE.long : m.street === 'crossing' ? TEXT_SIZE.narrow : TEXT_SIZE.phrase;
+      roadText(b, atlas, m.text, m.street, textCentre(m, m.text, opt), m.lateral, m.readFrom, opt);
     } else if (m.type === 'diamond') {
       diamond(b, atlas, m.street, along, m.lateral, m.readFrom);
     } else if (m.type === 'bicycle') {
@@ -198,13 +242,15 @@ export function buildMarkings(bins, atlas, konbini) {
   // ---- edge / centre lines --------------------------------------------------
   const mW = cornerById('mainW'), mE = cornerById('mainE');
   const cSW = cornerById('crSW'), cSE = cornerById('crSE'), cNW = cornerById('crNW'), cNE = cornerById('crNE');
+  const lne = LANES.find((l) => l.join0);
   const sEdge0 = MS.atZ(14.1).s;
   // main street: white edge lines (school-route section gets a green shoulder too)
-  const greenZ = [62, 132];
+  // (kept out of the foreground of the street / hero views, with gaps at driveways)
+  const greenZ = [88, 130];
   const gs0 = MS.atZ(greenZ[0]).s, gs1 = MS.atZ(greenZ[1]).s;
   for (const side of [-1, 1]) {
     mainLine(b, atlas, sEdge0, MS_S1 - 1, side * MS.edgeLine, 0.15);
-    mainLine(b, atlas, gs0, gs1, side * 3.52, 0.86, 'green');
+    mainLine(b, atlas, gs0, gs1, side * 3.52, 0.86, 'green', roadMarkY, (s) => hash2(Math.floor(s / 1.0), side + 7, 57) < 0.12);
   }
   // station-front road
   const sfW = SF.edgeLine;
@@ -224,7 +270,15 @@ export function buildMarkings(bins, atlas, konbini) {
     const lo = Math.min(seg.z0, seg.z1), hi = Math.max(seg.z0, seg.z1);
     const top = seg.z1 < -40 ? hi - 0.8 : hi - Math.max(cSW.R, cSE.R) - 0.3;
     const bot = seg.z1 < -40 ? lo + Math.max(cNW.R, cNE.R) + 0.3 : lo + 0.8;
-    if (top > bot) for (const side of [-1, 1]) lineAlong(b, atlas, 'crossing', bot, top, side * CR.edgeLine, 0.14);
+    if (top <= bot) continue;
+    lineAlong(b, atlas, 'crossing', bot, top, -CR.edgeLine, 0.14);
+    // east edge: broken at the mouth of lane LNE
+    for (const [a0, a1] of brk([[lne.z - lne.hw - 0.4, lne.z + lne.hw + 0.4]], bot, top)) lineAlong(b, atlas, 'crossing', a0, a1, CR.edgeLine, 0.14);
+  }
+  // residential lanes: faded white edge lines on both sides
+  for (const l of LANES) {
+    const a0 = l.join0 ? l.x0 + 1.2 : l.x0 + 0.6, a1 = l.join1 ? l.x1 - 0.6 : l.x1 - 0.6;
+    for (const side of [-1, 1]) lineAlong(b, atlas, l, a0, a1, side * l.edgeLine, 0.12, 'white2');
   }
   // north road
   for (const [a0, a1] of [[NR.from + 2, NR.to - 1]]) lineAlong(b, atlas, 'north', a0, a1, -NR.edgeLine, 0.14);

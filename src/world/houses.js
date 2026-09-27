@@ -7,20 +7,23 @@
  *   openings.js   windows (glass + room boxes + curtains), doors, porch,
  *                 balcony + laundry
  *   exterior.js   fences, gates, plants, doorstep clutter, AC units, meters,
- *                 service drop, antennas, garden patches
+ *                 service drop, antennas, garden patches, lane-side walls of
+ *                 the filler lots
+ *   rear.js       back gardens + rear boundary of the north row (levee side)
+ *   apartment.js  the two-storey アパート (open corridor, outside stair)
+ *   lot.js        per-lot driver + area chunks
  *   templates.js  small repeated objects (stamped)
  *   textures.js   canvas atlases (walls, roofs, decals, grime, laundry)
  *
- * All houses end up as ~one mesh per (area chunk x material kind): roughly
- * 60 draw calls for 117 houses.  Laundry and wind-chime strips sway in the
- * vertex shader (toonWind / toonTime), so they stay batched too.
+ * All houses end up as ~one mesh per (area chunk x material kind).  Laundry
+ * and wind-chime strips sway in the vertex shader (toonWind / toonTime), so
+ * they stay batched too.  Only a coarse per-lot proxy (kind 'shadow') is
+ * drawn into the shadow map.
  */
 import * as THREE from 'three';
 import { Batcher, mtx } from './houses/batch.js';
-import { makePlan } from './houses/plan.js';
-import { roofParams, buildFoundation, buildFacadeWall, buildRoof, buildFrontEave } from './houses/shell.js';
-import { planOpenings, buildOpenings } from './houses/openings.js';
-import { buildExterior, pottedPlant } from './houses/exterior.js';
+import { buildLot } from './houses/lot.js';
+import { pottedPlant } from './houses/exterior.js';
 import { makeTemplates } from './houses/templates.js';
 import { makeWallAtlas, makeRoofAtlas, makeDecalAtlas, makeGrimeAtlas, makeLaundryAtlas } from './houses/textures.js';
 
@@ -55,13 +58,6 @@ function houseGlass(toon) {
   return m;
 }
 
-/** Area chunks keep frustum culling useful while holding draw calls down. */
-function chunkOf(lot) {
-  if (lot.street === 'north') return lot.x < 0 ? 'nrW' : 'nrE';
-  if (lot.street === 'stationFront') return lot.x < 0 ? 'sfW' : 'sfE';
-  return lot.z < 78 ? 'mainN' : 'mainS';
-}
-
 export default async function build(ctx) {
   const { toon, layout } = ctx;
   const root = new THREE.Group();
@@ -74,13 +70,17 @@ export default async function build(ctx) {
   const grime = makeGrimeAtlas();
   const laundry = makeLaundryAtlas();
   const solid = toon.mat('#ffffff', { vertexColors: true, name: 'houses-solid' });
+  // Visible meshes do not cast: the sun's shadow map gets a coarse per-lot proxy
+  // instead (block boxes, roof slabs, eaves, balconies, fences, bulky props),
+  // ~150 triangles per lot rather than the full detail.
   const kinds = {
-    wall: { material: toon.mat('#ffffff', { map: wallTex, vertexColors: true, name: 'houses-wall' }), castShadow: true },
-    roof: { material: toon.mat('#ffffff', { map: roofTex, vertexColors: true, name: 'houses-roof' }), castShadow: true },
-    solid: { material: solid, castShadow: true },
-    small: { material: solid, noOutline: true, castShadow: false },
-    metal: { material: toon.metal('#ffffff', { vertexColors: true, name: 'houses-metal' }), castShadow: true },
-    leaf: { material: toon.mat('#ffffff', { vertexColors: true, rim: 0.35, name: 'houses-leaf' }), castShadow: true },
+    wall: { material: toon.mat('#ffffff', { map: wallTex, vertexColors: true, name: 'houses-wall' }) },
+    roof: { material: toon.mat('#ffffff', { map: roofTex, vertexColors: true, name: 'houses-roof' }) },
+    solid: { material: solid },
+    small: { material: solid, noOutline: true },
+    metal: { material: toon.metal('#ffffff', { vertexColors: true, name: 'houses-metal' }) },
+    leaf: { material: toon.mat('#ffffff', { vertexColors: true, rim: 0.35, name: 'houses-leaf' }) },
+    shadow: { material: solid, castShadow: true, noOutline: true, shadowOnly: true },
     glass: { material: houseGlass(toon), noOutline: true, castShadow: false },
     // interiors stay in the outline pre-pass so they hide the edges of geometry behind them
     unlit: { material: toon.unlit('#ffffff', { vertexColors: true, name: 'houses-unlit' }), castShadow: false },
@@ -100,28 +100,17 @@ export default async function build(ctx) {
   const B = new Batcher(kinds);
   const lots = layout.LOTS.filter((l) => l.type === 'house');
   const stats = { full: 0, reduced: 0, simple: 0 };
-  const lotM = new THREE.Matrix4();
   for (const lot of lots) {
-    const P = makePlan(lot);
+    const P = buildLot(B, D, lot);
     stats[P.lod]++;
-    planOpenings(P);
-    B.setChunk(chunkOf(lot));
-    lotM.makeRotationY(lot.rotY).setPosition(lot.x, lot.y, lot.z);
-    B.setBase(lotM);
-    D.porch = null;
-    for (const b of P.blocks) b.rp = roofParams(b);
-    for (const b of P.blocks) buildFoundation(B, P, b);
-    for (const f of P.facades) buildFacadeWall(B, P, f);
-    for (const b of P.blocks) buildRoof(B, P, b);
-    if (P.frontEave) buildFrontEave(B, P);
-    buildOpenings(B, P, D);
-    buildExterior(B, P, D);
     addColliders(ctx, lot, P);
   }
   const batch = B.build('houses');
   root.add(batch);
-  root.userData.stats = { ...stats, triangles: B.tris, meshes: batch.children.length };
-  if (ctx.params.has('shot')) console.info(`[houses] lots ${lots.length} (${JSON.stringify(stats)}), meshes ${batch.children.length}, tris ${B.tris}`);
+  let shadowTris = 0;
+  for (const m of batch.children) if (m.castShadow) shadowTris += m.geometry.index.count / 3;
+  root.userData.stats = { ...stats, triangles: B.tris, shadowTris, meshes: batch.children.length };
+  if (ctx.params.has('shot')) console.info(`[houses] lots ${lots.length} (${JSON.stringify(stats)}), meshes ${batch.children.length}, tris ${B.tris}, shadow-casting tris ${shadowTris}`);
   return root;
 }
 

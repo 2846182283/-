@@ -217,6 +217,43 @@ function paintCommon(add, names) {
     c.fillStyle = '#fff'; c.beginPath(); c.arc(w / 2, 86, 22, 0, Math.PI * 2); c.fill();
     T(c, '¥', w / 2 - 20, 66, 40, 40, { font: R, color: '#2d6fb8' });
   });
+  // service band on the plaza-side wall: icon tiles for the counter services
+  add('kServ', 768, 96, (c, w, h) => {
+    grad(c, 0, 0, w, h, '#ffffff', '#eef1ef');
+    kStripes(c, w, h - 14, 14);
+    const S = [['ATM', '#2d6fb8', '24時間'], ['コピー', '#3aa37a', 'FAX'], ['宅配便', '#f29a3a', '受付'], ['公共料金', '#3b7fd1', 'お支払い'], ['チケット', '#d0607e', '発券']];
+    S.forEach(([a, col, b], i) => {
+      const x = 8 + i * 152;
+      c.fillStyle = col; roundRect(c, x, 8, 144, 66, 10); c.fill();
+      c.fillStyle = '#fff'; roundRect(c, x + 4, 12, 136, 58, 8); c.fill();
+      T(c, a, x + 8, 14, 128, 32, { font: R, color: col });
+      T(c, b, x + 8, 48, 128, 18, { font: G, color: '#555' });
+    });
+  });
+  // bicycle-parking wall plate (blue, arrow toward the forecourt)
+  add('kBike', 128, 160, (c, w, h) => {
+    fill(c, w, h, '#2d6fb8');
+    c.fillStyle = '#fff'; roundRect(c, 6, 6, w - 12, h - 12, 10); c.fill();
+    c.fillStyle = '#2d6fb8'; roundRect(c, 12, 12, w - 24, 70, 8); c.fill();
+    // simple bicycle pictogram
+    c.strokeStyle = '#fff'; c.lineWidth = 5;
+    c.beginPath(); c.arc(40, 56, 15, 0, Math.PI * 2); c.stroke();
+    c.beginPath(); c.arc(88, 56, 15, 0, Math.PI * 2); c.stroke();
+    c.beginPath(); c.moveTo(40, 56); c.lineTo(58, 32); c.lineTo(82, 32); c.lineTo(88, 56); c.moveTo(58, 32); c.lineTo(64, 56); c.lineTo(82, 32); c.stroke();
+    T(c, '駐輪場', 12, 88, w - 24, 30, { font: R, color: '#2d6fb8' });
+    T(c, '→ 店舗前', 12, 122, w - 24, 22, { font: G, color: '#444' });
+  });
+  // delivery door plates: 搬入口 over the door, 関係者以外立入禁止 on the leaf
+  add('kStaff', 256, 96, (c, w, h) => {
+    fill(c, w, h, '#f4f4f0');
+    c.fillStyle = '#3aa37a'; c.fillRect(0, 0, 120, h);
+    T(c, '搬入口', 8, 16, 104, 40, { font: R, color: '#fff' });
+    T(c, '納品車両', 8, 60, 104, 22, { font: G, color: '#e8f4ee' });
+    c.fillStyle = '#e8483f'; c.fillRect(128, 0, 128, 22);
+    T(c, '注意', 132, 2, 120, 18, { font: R, color: '#fff' });
+    T(c, '関係者以外', 132, 28, 120, 28, { font: R, color: '#333' });
+    T(c, '立入禁止', 132, 60, 120, 28, { font: R, color: '#e8483f' });
+  });
   add('kPostDrink', 128, 192, (c, w, h, rnd) => {
     paper(c, w, h, '#e4f4fb', rnd, false);
     for (let i = 0; i < 10; i++) { c.fillStyle = 'rgba(255,255,255,0.7)'; c.beginPath(); c.arc(rnd() * w, rnd() * h, 3 + rnd() * 6, 0, Math.PI * 2); c.fill(); }

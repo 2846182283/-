@@ -19,6 +19,7 @@ const WIN = {
   slit: { w: 0.45, h: 1.15, sill: 0.8 },
   high: { w: 1.2, h: 0.5, sill: 1.55 },
   bdoor: { w: 1.7, h: 2.0, sill: 0.04 },
+  udoor: { w: 0.85, h: 2.0, sill: 0.02 }, // steel unit door (apartment)
 };
 
 // ---------------------------------------------------------------------------
@@ -37,13 +38,27 @@ export function planOpenings(P) {
       const reserved = [];
       // door
       for (const o of f.openings) if (o.kind === 'door' && fl === 0) reserved.push([o.u0 - 0.4, o.u1 + 0.4]);
-      // balcony door
-      if (fl === 1 && P.balcony && P.balcony.facade === f) {
-        const bc = P.balcony;
-        const bw = Math.min(WIN.bdoor.w, bc.u1 - bc.u0 - 0.5);
-        const u0 = (bc.u0 + bc.u1) / 2 - bw / 2 + (r() - 0.5) * Math.max(0, bc.u1 - bc.u0 - bw - 0.6);
-        addWin(f, 'bdoor', u0, floorY, bw, P, r);
-        reserved.push([u0 - 0.3, u0 + bw + 0.3]);
+      // balcony doors
+      if (fl === 1) {
+        for (const bc of P.balconies) {
+          if (bc.facade !== f) continue;
+          const bw = Math.min(WIN.bdoor.w, bc.u1 - bc.u0 - 0.5);
+          const u0 = (bc.u0 + bc.u1) / 2 - bw / 2 + (r() - 0.5) * Math.max(0, bc.u1 - bc.u0 - bw - 0.6);
+          addWin(f, 'bdoor', u0, floorY, bw, P, r);
+          reserved.push([u0 - 0.3, u0 + bw + 0.3]);
+        }
+      }
+      if (P.apartment && isFront) {
+        // two units per floor: steel door + small frosted kitchen window each
+        const half = f.L / 2;
+        for (let k = 0; k < 2; k++) {
+          const du = k * half + 0.45;
+          addWin(f, 'udoor', du, floorY, WIN.udoor.w, P, r);
+          const w = addWin(f, 'small', du + 1.35, floorY, WIN.small.w, P, r);
+          w.frosted = true; w.grille = true;
+          reserved.push([k * half, (k + 1) * half]);
+        }
+        continue;
       }
       // the wing hides the lower part of the main block's right facade
       if (wing && b === P.main && f.side === 'right') {
@@ -58,6 +73,7 @@ export function planOpenings(P) {
       // long plain side walls read as blank slabs from the street: give them a second opening
       if (!simple && !isFront && !isBack && f.L > 7 && types.length < 2) types.push(fl === 0 ? 'high' : 'mid');
       if (b.wing) types = f.side === 'front' ? [r() < 0.5 ? 'mid' : 'std'] : f.side === 'right' ? [r() < 0.5 ? 'small' : 'high'] : ['small'];
+      if (P.apartment && isBack && fl === 0) types = ['tall', 'tall'];
       types = types.filter((t) => t !== 'none');
       for (const t of types) {
         const spec = WIN[t];
@@ -96,6 +112,7 @@ function addWin(f, type, u0, floorY, w, P, r) {
   o.sudare = P.trad && type !== 'small' && !o.frosted && r() < 0.18;
   o.louvre = o.frosted && (type === 'small' || type === 'slit') && r() < 0.35; // jalousie (ジャロジー)
   o.closed = (type === 'std' || type === 'tall') && r() < (P.trad ? 0.12 : 0.04); // rain shutters drawn
+  if (type === 'udoor') Object.assign(o, { frosted: false, curtains: false, lit: false, roller: false, awning: false, flowerBox: false, sudare: false, louvre: false, grille: false });
   f.openings.push(o);
   return o;
 }
@@ -125,17 +142,20 @@ export function buildOpenings(B, P, D) {
       if (o.kind === 'door') door(B, P, f, o, D);
       else window_(B, P, f, o, roomDepth, D);
     }
-    if (P.balcony && P.balcony.facade === f) balcony(B, P, f, D);
+    for (const bc of P.balconies) if (bc.facade === f) balcony(B, P, f, D, bc);
     B.pop();
   }
 }
 
-/** Rectangular frame ring inside an opening. */
-function ring(B, kind, u0, y0, u1, y1, fw, z0, z1, color) {
-  B.box(kind, u0, y0, z0, u1, y0 + fw, z1, color, { skip: 'z' });
-  B.box(kind, u0, y1 - fw, z0, u1, y1, z1, color, { skip: 'z' });
-  B.box(kind, u0, y0 + fw, z0, u0 + fw, y1 - fw, z1, color, { skip: 'zy' });
-  B.box(kind, u1 - fw, y0 + fw, z0, u1, y1 - fw, z1, color, { skip: 'zy' });
+/**
+ * Rectangular frame ring inside an opening.  flush: the ring fills the
+ * opening exactly, so its outer faces sit against the wall reveals (skipped).
+ */
+function ring(B, kind, u0, y0, u1, y1, fw, z0, z1, color, flush = false) {
+  B.box(kind, u0, y0, z0, u1, y0 + fw, z1, color, { skip: flush ? 'zy' : 'z' });
+  B.box(kind, u0, y1 - fw, z0, u1, y1, z1, color, { skip: flush ? 'zY' : 'z' });
+  B.box(kind, u0, y0 + fw, z0, u0 + fw, y1 - fw, z1, color, { skip: flush ? 'zyYx' : 'zy' });
+  B.box(kind, u1 - fw, y0 + fw, z0, u1, y1 - fw, z1, color, { skip: flush ? 'zyYX' : 'zy' });
 }
 
 function window_(B, P, f, o, roomDepth, D) {
@@ -145,7 +165,8 @@ function window_(B, P, f, o, roomDepth, D) {
   const simple = P.lod === 'simple';
   const light = P.lod !== 'full'; // far houses: single mullion + flat interior
   const fw = 0.045;
-  ring(B, 'solid', u0, y0, u1, y1, fw, -0.075, 0.014, fc);
+  if (o.type === 'udoor') return unitDoor(B, P, o);
+  ring(B, 'solid', u0, y0, u1, y1, fw, -0.075, 0.014, fc, true);
   // sill flashing (水切り)
   if (o.type !== 'bdoor') B.box('solid', u0 - 0.03, y0 - 0.035, -0.01, u1 + 0.03, y0 + 0.004, 0.055, shade(fc, 0.08), { skip: 'z' });
   const gy0 = y0 + fw, gy1 = y1 - fw;
@@ -215,6 +236,22 @@ function window_(B, P, f, o, roomDepth, D) {
     const zz = 0.004;
     B.quad('grime', [u0, y0 - 0.04 - h, zz], [u1, y0 - 0.04 - h, zz], [u1, y0 - 0.04, zz], [u0, y0 - 0.04, zz], '#ffffff', [[g[0], g[1]], [g[2], g[1]], [g[2], g[3]], [g[0], g[3]]]);
   }
+}
+
+/** Apartment unit door: steel leaf in a pressed frame, lever handle, peephole, number plate. */
+function unitDoor(B, P, o) {
+  const { u0, u1, y0, y1 } = o;
+  const fc = '#8d9197';
+  ring(B, 'solid', u0, y0, u1, y1, 0.05, -0.08, 0.02, fc, true);
+  const dc = P.aptDoor || (P.aptDoor = P.r.pick(['#7b8a96', '#8a7a6a', '#6d7f73', '#a49a8c']));
+  B.box('solid', u0 + 0.05, y0, -0.07, u1 - 0.05, y1 - 0.05, -0.04, dc, { skip: 'z' });
+  // pressed panel lines + lever + peephole + mail slot
+  B.box('small', u0 + 0.12, y0 + 0.25, -0.04, u1 - 0.12, y0 + 0.27, -0.035, shade(dc, -0.12));
+  B.box('small', u0 + 0.12, y1 - 0.3, -0.04, u1 - 0.12, y1 - 0.28, -0.035, shade(dc, -0.12));
+  B.box('metal', u1 - 0.2, y0 + 0.95, -0.04, u1 - 0.08, y0 + 0.98, 0.0, '#c9cdd2');
+  B.box('small', u0 + 0.28, y0 + 0.7, -0.04, u1 - 0.28, y0 + 0.74, -0.03, '#c9cdd2');
+  B.boxC('small', (u0 + u1) / 2, y0 + 1.5, -0.035, 0.03, 0.03, 0.01, '#3a3d42');
+  B.box('small', u0 - 0.2, y0 + 1.55, 0.0, u0 - 0.06, y0 + 1.63, 0.012, '#f1efe9');
 }
 
 /** Interior box behind a window: back wall, floor, ceiling, sides, curtains. */
@@ -318,6 +355,7 @@ function awning(B, P, o) {
   const c = P.trad ? shade(P.main.roof.color, 0.05) : '#8a939c';
   const a = u0 - 0.18, b = u1 + 0.18, d = 0.42;
   const yt = y1 + 0.34, yb = y1 + 0.2;
+  B.shadowBox(a, yb - 0.04, 0.01, b, yt, d);
   B.hexa([[a, yb, d], [b, yb, d], [b, yt, 0], [a, yt, 0]], [[a, yb - 0.04, d], [b, yb - 0.04, d], [b, yt - 0.04, 0], [a, yt - 0.04, 0]],
     { top: { kind: 'solid', color: c }, bottom: { kind: 'solid', color: P.soffit }, sides: [{ kind: 'solid', color: shade(c, -0.05) }, { kind: 'solid', color: c }, null, { kind: 'solid', color: c }] });
   for (const u of [a + 0.05, b - 0.05]) face(B, 'small', [[u, yt - 0.04, 0], [u, yb - 0.04, d * 0.8], [u, yt - 0.22, 0]], shade(c, -0.1), null, [1, 0, 0]);
@@ -345,7 +383,7 @@ function door(B, P, f, o, D) {
   const w = u1 - u0;
   const fc = P.frame;
   const fw = 0.06;
-  ring(B, 'solid', u0, y0, u1, y1, fw, -0.09, 0.016, fc);
+  ring(B, 'solid', u0, y0, u1, y1, fw, -0.09, 0.016, fc, true);
   B.box('metal', u0 + fw, y0, -0.1, u1 - fw, y0 + 0.02, 0.01, '#b5b9be');
   const dc = P.trad ? r.pick(['#6b4e38', '#7a5a42', '#5b4332']) : r.pick(DOOR_COLORS);
   const simple = P.lod === 'simple';
@@ -423,17 +461,20 @@ function porch(B, P, f, o, D) {
   if (ct === 'slab') {
     const cy = y1 + 0.3;
     B.box('solid', ca, cy, 0, cb, cy + 0.1, 0.95, P.trim === '#5b4332' ? '#e9e6de' : P.trim, { colors: { y: P.soffit } });
+    B.shadowBox(ca, cy, 0.01, cb, cy + 0.1, 0.95);
     B.box('small', ca - 0.01, cy - 0.02, 0.93, cb + 0.01, cy + 0.12, 0.97, '#9aa1a8');
     B.boxC('unlit', uc, cy - 0.005, 0.5, 0.14, 0.01, 0.14, '#ffe6b0');
   } else if (ct === 'hood') {
     const c = r.pick(['#8a939c', '#6b7a86', '#5f6670', '#b9c4cc']);
     const yt = y1 + 0.55, yb = y1 + 0.3, d = 0.85;
+    B.shadowBox(ca, yb - 0.05, 0.01, cb, yt, d);
     B.hexa([[ca, yb, d], [cb, yb, d], [cb, yt, 0], [ca, yt, 0]], [[ca, yb - 0.05, d], [cb, yb - 0.05, d], [cb, yt - 0.05, 0], [ca, yt - 0.05, 0]],
       { top: { kind: 'solid', color: c }, bottom: { kind: 'solid', color: shade(c, 0.1) }, sides: [{ kind: 'solid', color: shade(c, -0.05) }, { kind: 'solid', color: c }, null, { kind: 'solid', color: c }] });
     for (const u of [ca + 0.08, cb - 0.08]) B.beam('small', [u, yt - 0.35, 0], [u, yb - 0.04, d - 0.1], 0.03, 0.03, shade(c, -0.15), { centerY: true });
   } else if (ct === 'kawara') {
     const c = P.main.roof.color;
     const yt = y1 + 0.75, yb = y1 + 0.38, d = 1.0;
+    B.shadowBox(ca - 0.1, yb - 0.14, 0.01, cb + 0.1, yt, d);
     const uvf = (p) => [p[0] / ROOF_U_PERIOD, roofV('kawara', (d - p[2]) * 1.1)];
     B.hexa([[ca - 0.1, yb, d], [cb + 0.1, yb, d], [cb + 0.1, yt, 0], [ca - 0.1, yt, 0]], [[ca - 0.1, yb - 0.14, d], [cb + 0.1, yb - 0.14, d], [cb + 0.1, yt - 0.14, 0], [ca - 0.1, yt - 0.14, 0]],
       { top: { kind: 'roof', color: c, uv: uvf }, bottom: { kind: 'solid', color: '#b89a78' }, sides: [{ kind: 'solid', color: shade(c, -0.05) }, { kind: 'solid', color: shade(c, -0.05) }, null, { kind: 'solid', color: shade(c, -0.05) }] });
@@ -494,8 +535,7 @@ export function decalQuad(B, D, name, u, y, z, w, h) {
 // ---------------------------------------------------------------------------
 // balcony + laundry
 // ---------------------------------------------------------------------------
-function balcony(B, P, f, D) {
-  const bc = P.balcony;
+function balcony(B, P, f, D, bc) {
   const r = P.r;
   const { u0, u1 } = bc;
   const dp = bc.depth;
@@ -505,6 +545,10 @@ function balcony(B, P, f, D) {
   // floor slab + fascia + brackets
   B.box('solid', u0, yS - 0.2, 0, u1, yS, dp, '#c9c7c2', { colors: { y: P.soffit, Z: edge, X: edge, x: edge } });
   B.box('solid', u0 - 0.015, yS - 0.24, dp - 0.02, u1 + 0.015, yS - 0.12, dp + 0.02, shade(edge, -0.04), { skip: 'z' });
+  // shadow proxy: slab + front railing (bars only cast their top rail)
+  B.shadowBox(u0, yS - 0.24, 0.01, u1, yS, dp + 0.02);
+  if (bc.rail === 'bars') B.shadowBox(u0, yS + 0.99, dp - 0.07, u1, yS + 1.1, dp);
+  else B.shadowBox(u0, yS, dp - 0.1, u1, yS + 1.09, dp);
   // steel knee braces under the slab
   for (const u of [u0 + 0.15, u1 - 0.15]) {
     B.beam('metal', [u, yS - 0.62, 0.02], [u, yS - 0.21, dp * 0.72], 0.05, 0.05, '#8d9197', { centerY: true });

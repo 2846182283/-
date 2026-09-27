@@ -255,6 +255,29 @@ export class Batcher {
     this.pop();
   }
 
+  // -- shadow proxies ----------------------------------------------------------
+  /**
+   * Closed box in the 'shadow' kind (drawn only into the sun's shadow map; see
+   * build()).  The visible house meshes do not cast: a few of these per lot
+   * stand in for walls, eaves, balconies, fences and bulky props.
+   */
+  shadowBox(x0, y0, z0, x1, y1, z1) {
+    this.box('shadow', x0, y0, z0, x1, y1, z1, SHADOW_COL);
+  }
+
+  /** Low-poly closed octahedron in the 'shadow' kind (shrubs, hedge crowns). */
+  shadowBlob(cx, cy, cz, rx, ry, rz) {
+    const X0 = [cx - rx, cy, cz], X1 = [cx + rx, cy, cz], Y0 = [cx, cy - ry, cz], Y1 = [cx, cy + ry, cz], Z0 = [cx, cy, cz - rz], Z1 = [cx, cy, cz + rz];
+    const T = [[X1, Y1, Z1], [Z1, Y1, X0], [X0, Y1, Z0], [Z0, Y1, X1], [X1, Z1, Y0], [Z1, X0, Y0], [X0, Z0, Y0], [Z0, X1, Y0]];
+    for (const t of T) this.poly('shadow', t, SHADOW_COL);
+  }
+
+  /** Both windings of a flat polygon in the 'shadow' kind (gable infill, thin panels). */
+  shadowPoly(pts) {
+    this.poly('shadow', pts, SHADOW_COL);
+    this.poly('shadow', pts.slice().reverse(), SHADOW_COL);
+  }
+
   /** Polyline tube (pipes, cables).  pts: [[x,y,z]...] */
   pipe(kind, pts, r, color, n = 6) {
     for (let i = 0; i < pts.length - 1; i++) this.cyl(kind, pts[i], pts[i + 1], r, color, n, { caps: i === 0 ? (pts.length === 2 ? true : 'start') : i === pts.length - 2 ? 'end' : false });
@@ -331,6 +354,15 @@ export class Batcher {
       mesh.name = `${name}:${b.chunk}:${b.kind}`;
       mesh.castShadow = !!K.castShadow;
       mesh.receiveShadow = K.receiveShadow !== false;
+      if (K.shadowOnly) {
+        // Shadow-map-only proxy: an empty draw range makes the renderer skip the
+        // draw (no call, no triangles) in every camera pass; the shadow pass
+        // restores the full range just before drawing (onBeforeShadow).
+        mesh.receiveShadow = false;
+        mesh.onBeforeRender = hideDraw;
+        mesh.onBeforeShadow = showDraw;
+        mesh.userData.shadowOnly = true;
+      }
       if (K.noOutline) mesh.userData.noOutline = true;
       if (K.renderOrder) mesh.renderOrder = K.renderOrder;
       group.add(mesh);
@@ -340,6 +372,9 @@ export class Batcher {
 }
 
 const ZERO_UV = [0, 0];
+const SHADOW_COL = [1, 1, 1];
+function hideDraw(renderer, scene, camera, geometry) { geometry.drawRange.count = -1; }
+function showDraw(renderer, object, camera, shadowCamera, geometry) { geometry.drawRange.count = Infinity; }
 const X_AXIS = new THREE.Vector3(1, 0, 0);
 
 // corner selectors (0 = min, 1 = max) per face, CCW seen from outside

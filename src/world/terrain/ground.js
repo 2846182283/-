@@ -1,7 +1,7 @@
 /**
  * terrain/ground — the base height-field over TERRAIN.extentX/Z.
  *
- * One tensor-product grid with graded spacing: ~2.5 m in the town, 0.7 m
+ * One tensor-product grid with graded spacing: ~2 m in the town, 0.7 m
  * across the levee / river band (so the slopes are smooth), coarsening to
  * ~14 m at the extents.  Region colours are baked into vertex colours and a
  * small splat attribute (x = soil weight, y = flower weight) drives a toon
@@ -104,7 +104,7 @@ function groundLook(x, z) {
     if (Math.abs(x) > 230) flower = 0.4;
   } else if (z < -49.9) {
     // north residential backs: gardens (mostly grass, some soil)
-    const g = smoothstep(0.3, 0.5, fbm(x * 0.14, z * 0.14, 14, 3));
+    const g = smoothstep(0.18, 0.36, fbm(x * 0.14, z * 0.14, 14, 3));
     c = mixLin(C.soil, C.grass, g);
     soil = 1 - g;
     flower = 0.2 * g;
@@ -124,14 +124,15 @@ function groundLook(x, z) {
     c = C.soil;
     soil = 1;
   } else {
-    // town ground between buildings: mostly short grass, some bare soil and gravel
+    // town ground between buildings: short grass with small worn-soil patches
+    // (high-frequency so they read as footpaths / bare spots, not camouflage)
     const nt = fbm(x * 0.16, z * 0.16, 12, 3);
-    const g = smoothstep(0.3, 0.5, nt);
-    c = mixLin(C.soil, mixLin(C.grass, C.grassDry, n2 * 0.6), g);
-    soil = 1 - g * 0.9;
-    flower = 0.15 * g;
-    const gv = smoothstep(0.62, 0.7, fbm(x * 0.03 + 7, z * 0.03, 44, 2));
-    c = mixLin(c, C.gravel, gv * 0.8);
+    const g = smoothstep(0.15, 0.32, nt);
+    const bare = smoothstep(0.6, 0.72, fbm(x * 0.32, z * 0.32, 13, 2)) * 0.5;
+    const grassC = mixLin(mixLin(C.grass, C.grassFresh, n1 * 0.7), C.grassDry, n2 * 0.45);
+    c = mixLin(C.soil, grassC, g * (1 - bare));
+    soil = 1 - g * (1 - bare) * 0.9;
+    flower = 0.3 * g * (1 - bare);
   }
   if (farOut > 0 && z > T.farLeveeTopNorth) {
     const t = smoothstep(0, 40, farOut);
@@ -166,7 +167,7 @@ function groundShader(detail, flowers) {
         det *= 0.82 + 0.36 * ( macro * 0.6 + macro2 * 0.4 );
         diffuseColor.rgb *= det;
         vec4 fl = texture2D( tFlowers, wp * 0.17 );
-        float fm = fl.a * vSplat.y * smoothstep( 0.62, 0.8, macro );
+        float fm = clamp( fl.a * vSplat.y * smoothstep( 0.45, 0.7, macro ) * 1.3, 0.0, 1.0 );
         diffuseColor.rgb = mix( diffuseColor.rgb, fl.rgb, fm );
       }`);
   };
@@ -175,13 +176,13 @@ function groundShader(detail, flowers) {
 export function buildGround(ctx, tex) {
   const xs = gradedLines(T.extentX[0], T.extentX[1], (x) => {
     const d = x < -150 ? -150 - x : x > 160 ? x - 160 : 0;
-    return 3 + Math.min(14, d * 0.1);
+    return 2 + Math.min(14, d * 0.1);
   }, [PLAZA.xMin, PLAZA.xMax]);
   const zs = gradedLines(T.extentZ[0], T.extentZ[1], (z) => {
     if (z > -106 && z < -60) return 0.8;
     if (z <= -106) return 2.5 + Math.min(14, (-106 - z) * 0.08);
     if (z > 180) return 2.5 + Math.min(10, (z - 180) * 0.08);
-    return 2.5;
+    return z > -60 ? 2.0 : 2.5;
   }, [RAIL.corridor.zMin, RAIL.corridor.zMax, T.leveeSouthFoot, T.leveeTopSouth, T.leveeTopNorth, T.riverSouthBank, T.riverNorthBank, T.farLeveeTopSouth, T.farLeveeTopNorth]);
 
   const nx = xs.length, nz = zs.length;

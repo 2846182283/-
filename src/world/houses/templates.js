@@ -52,6 +52,8 @@ function lathe(profile, seg = 10) {
 export function makeTemplates(D) {
   const T = {};
   T.blobs = [11, 23, 37, 51].map((s) => fromGeometry(jitterIco(s), 'leaf', '#ffffff'));
+  // 20-triangle clumps for long hedges and the cheap lane-side planting
+  T.blobsLow = [11, 23, 37, 51].map((s) => fromGeometry(jitterIco(s, 0), 'leaf', '#ffffff'));
   T.ball = fromGeometry(new THREE.IcosahedronGeometry(1, 1), 'unlit', '#ffffff');
   T.ballSolid = fromGeometry(new THREE.IcosahedronGeometry(1, 1), 'solid', '#ffffff');
 
@@ -60,6 +62,11 @@ export function makeTemplates(D) {
   T.potGlazed = fromGeometry(lathe([[0, 0], [0.3, 0], [0.45, 0.2], [0.5, 0.55], [0.42, 0.92], [0.44, 1.0], [0.36, 1.0], [0, 0.9]]), 'solid', '#4f7fa8');
   T.potBox = makeTemplate((B) => {
     B.box('solid', -0.5, 0, -0.5, 0.5, 0.9, 0.5, '#ffffff');
+    B.box('solid', -0.54, 0.86, -0.54, 0.54, 1.0, 0.54, '#ffffff', { skip: 'y' });
+  });
+  // cheap square planter pot (filler lots)
+  T.potLow = makeTemplate((B) => {
+    B.box('solid', -0.5, 0, -0.5, 0.5, 0.9, 0.5, '#ffffff', { skip: 'y' });
     B.box('solid', -0.54, 0.86, -0.54, 0.54, 1.0, 0.54, '#ffffff', { skip: 'y' });
   });
   T.bucket = fromGeometry(lathe([[0, 0.01], [0.13, 0.01], [0.16, 0.28], [0.17, 0.3], [0.155, 0.3], [0.14, 0.05], [0, 0.05]]), 'solid', '#ffffff');

@@ -506,13 +506,14 @@ function shrinePlaque(g, w, h) {
 }
 
 function brick(g, w, h, rnd) {
-  g.fillStyle = '#d8d2c6';
+  g.fillStyle = '#dcd6ca';
   g.fillRect(0, 0, w, h);
   const bh = h / 4, bw = w / 4;
   for (let r = 0; r < 4; r++) {
     for (let c = -1; c < 5; c++) {
       const x = c * bw + (r % 2 ? bw / 2 : 0);
-      const tone = ['#b8614a', '#c26d52', '#a9573f', '#c97a5e', '#b36850'][Math.floor(rnd() * 5)];
+      // faded, weathered brick (muted terracotta so the plaza stays pastel)
+      const tone = ['#b87864', '#c4866f', '#ab6f5e', '#c99380', '#b57f6c', '#bf8a78'][Math.floor(rnd() * 6)];
       g.fillStyle = tone;
       g.fillRect(x + 2, r * bh + 2, bw - 4, bh - 4);
       g.fillStyle = 'rgba(255,255,255,0.12)';
@@ -657,6 +658,57 @@ export function mural(g, w, h) {
   fitText(g, '桜ヶ丘小学校 6年生', w * 0.62, h * 0.9, w * 0.36, h * 0.09, { font: FONTS.round, weight: 700, color: '#5a3a26', align: 'right' });
   // painted border
   g.strokeStyle = '#ffffff'; g.lineWidth = 6; g.strokeRect(3, 3, w - 6, h - 6);
+}
+
+/**
+ * Hand-painted weathering for a plain rendered wall (white base; the mesh's vertex colour
+ * supplies the wall tone): a soft splash band at the foot, rain streaks running down
+ * from the roof edge and a couple of faint water stains.  Packed into the vending atlas.
+ */
+export function wallStains(g, w, h) {
+  const rnd = seeded(515);
+  g.fillStyle = '#ffffff';
+  g.fillRect(0, 0, w, h);
+  // broad, very soft colour unevenness (hand-painted, not noise)
+  blotches(g, w, h, rnd, '#d8d0c4', 7, 0.1, 0.35);
+  blotches(g, w, h, rnd, '#c9cdd6', 4, 0.08, 0.3);
+  // splash / dust band rising from the plinth, with a wavy upper edge
+  g.save();
+  const grad = g.createLinearGradient(0, h * 0.7, 0, h);
+  grad.addColorStop(0, 'rgba(140,125,110,0)');
+  grad.addColorStop(1, 'rgba(140,125,110,0.42)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 30; i++) {
+    g.globalAlpha = 0.06 + rnd() * 0.08;
+    g.fillStyle = rnd() < 0.6 ? '#8f7f6c' : '#8a9088';
+    g.beginPath();
+    g.ellipse(rnd() * w, h - rnd() * h * 0.14, 6 + rnd() * 18, 2 + rnd() * 7, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+  // rain streaks from the roof edge: tapered, in loose groups
+  g.globalAlpha = 1;
+  for (let k = 0; k < 7; k++) {
+    const gx = rnd() * w;
+    const n = 2 + Math.floor(rnd() * 4);
+    for (let i = 0; i < n; i++) {
+      const x = gx + (rnd() - 0.5) * 24, len = h * (0.2 + rnd() * 0.45), wd = 1.5 + rnd() * 3;
+      const sg = g.createLinearGradient(0, 0, 0, len);
+      sg.addColorStop(0, 'rgba(105,105,115,0.2)');
+      sg.addColorStop(1, 'rgba(105,105,115,0)');
+      g.fillStyle = sg;
+      g.beginPath();
+      g.moveTo(x - wd / 2, 0); g.lineTo(x + wd / 2, 0); g.lineTo(x + wd * 0.15, len); g.lineTo(x - wd * 0.15, len);
+      g.fill();
+    }
+  }
+  // top shadow line under the roof overhang
+  const tg = g.createLinearGradient(0, 0, 0, h * 0.08);
+  tg.addColorStop(0, 'rgba(110,110,125,0.25)');
+  tg.addColorStop(1, 'rgba(110,110,125,0)');
+  g.fillStyle = tg;
+  g.fillRect(0, 0, w, h * 0.08);
+  g.restore();
 }
 
 /** Build the signs & misc atlas.  Returns { texture, r(name) }. */

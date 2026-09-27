@@ -51,13 +51,15 @@ export function buildExterior(B, P, D) {
   serviceDrop(B, P, D);
   if (P.lod === 'full') for (const f of P.facades) facadeGrime(B, P, D, f);
   if (P.lod !== 'simple') {
-    frontYard(B, P, D);
+    if (!P.apartment) frontYard(B, P, D);
+    dogWalk(B, P);
     sideServices(B, P, D);
     if (lot.gardenTree) gardenPatch(B, P, D);
   } else {
-    // back-row houses: a couple of cheap signs of life
-    const f = P.facade('main', 'left');
-    if (f && P.r() < 0.6) wallAC(B, P, D, f, true);
+    // back-row / lane filler houses: a couple of cheap signs of life
+    const f = P.facade('main', P.r() < 0.5 ? 'left' : 'right');
+    if (f && P.r() < 0.6) wallAC(B, P, D, f, lot.filler ? P.r() < 0.4 : true);
+    if (lot.filler) laneFront(B, P, D);
   }
   roofTop(B, P, D);
 }
@@ -152,6 +154,7 @@ export function plant(B, D, kind, x, y, z, size, r) {
     }
     case 'hydrangea': {
       B.stamp(blob(), mtx(x, y + size * 0.45, z, r() * 6, size, size * 0.75, size), shade(green, -0.03));
+      if (size > 0.28) B.shadowBlob(x, y + size * 0.6, z, size, size * 0.6, size);
       const hc = r.pick(['#9db8e8', '#b9a3e3', '#f2b8cf', '#a7c7f2', '#d6c2f0']);
       for (let i = 0; i < 5; i++) {
         const a = r() * 6.28, d = size * (0.35 + r() * 0.45);
@@ -204,6 +207,7 @@ export function plant(B, D, kind, x, y, z, size, r) {
 function shrub(B, D, x, y, z, size, r, color) {
   // a cluster of smaller clumps reads as foliage rather than one smooth blob
   const T = D.tpl;
+  if (size > 0.28) B.shadowBlob(x, y + size * 0.6, z, size * 0.95, size * 0.6, size * 0.95);
   const base = color || r.pick(LEAF);
   const n = size > 0.4 ? 5 : 3;
   for (let i = 0; i < n; i++) {
@@ -322,11 +326,71 @@ function frontYard(B, P, D) {
   }
 }
 
+/**
+ * 犬走り: a narrow concrete apron along the back and sides of the house so the
+ * wall base meets something harder than lawn.  Follows the ground slope.
+ */
+function dogWalk(B, P) {
+  const w = 0.45;
+  const c = shade('#c4c1b9', ((P.seed >>> 4) % 7) * 0.008 - 0.024);
+  const strip = (x0, z0, x1, z1, open) => {
+    const g = (x, z) => P.gy(x, z);
+    const t = [[x0, g(x0, z1) + 0.035, z1], [x1, g(x1, z1) + 0.035, z1], [x1, g(x1, z0) + 0.035, z0], [x0, g(x0, z0) + 0.035, z0]];
+    const bt = t.map((p) => [p[0], p[1] - 0.25, p[2]]);
+    const F = { kind: 'solid', color: c }, E = { kind: 'solid', color: shade(c, -0.06) };
+    // sides: 0 = +z edge, 1 = +x edge, 2 = -z edge, 3 = -x edge; `open` lists edges against a wall
+    B.hexa(t, bt, { top: F, bottom: null, sides: [0, 1, 2, 3].map((i) => (open.includes(i) ? null : E)) });
+  };
+  const m = P.main;
+  if (P.lot.street !== 'north') strip(m.x0 - w, m.z0 - w, m.x1 + w, m.z0, [0]); // (north row: rear.js paves the back garden)
+  strip(m.x0 - w, m.z0 - (P.lot.street === 'north' ? 0 : w), m.x0, m.z1, [1]);
+  const right = P.wing ? P.wing : m;
+  strip(right.x1, right.z0 - (P.lot.street === 'north' ? 0 : w), right.x1 + w, right.z1, [3]);
+}
+
+/**
+ * Lane-side front of a filler lot: a low block wall, hedge or mesh fence along
+ * the lane edge with a gap at the door, a step, and maybe a pot or bin.
+ * Budget: well under 200 triangles.
+ */
+function laneFront(B, P, D) {
+  const lot = P.lot, r = P.r, W = P.W;
+  const edgeZ = P.D / 2 + (lot.setback ?? 0) + 0.01;
+  const fz = edgeZ - 0.08;
+  const f = P.entry.facade;
+  const doorC = f.toLocal((P.entry.u0 + P.entry.u1) / 2, 0)[0];
+  const doorZ = f.toLocal(0, 0)[1];
+  // entrance step
+  const g = P.gy(doorC, doorZ + 0.3);
+  B.box('solid', doorC - 0.6, g - 0.2, doorZ, doorC + 0.6, FOUND - 0.2, doorZ + 0.4, shade(P.found, 0.04), { skip: 'yz' });
+  const type = pickW(r, [['block', 4], ['hedge', 2.5], ['mesh', 1.2], ['none', 2]]);
+  if (type !== 'none') {
+    const H = type === 'block' ? r.pick([0.7, 0.9, 1.0]) : type === 'hedge' ? r.range(0.75, 0.95) : 0.85;
+    const runs = [[-W / 2 + 0.05, doorC - 0.65], [doorC + 0.65, W / 2 - 0.05]];
+    for (const [a, b] of runs) if (b - a > 0.4) fenceRun(B, P, D, a, b, fz, 'x', type, H, true);
+  }
+  // one small sign of life by the door
+  const side = r() < 0.5 ? -1 : 1;
+  const px = doorC + side * r.range(0.75, 1.1);
+  const pz = doorZ + 0.28;
+  if (Math.abs(px) < W / 2 - 0.3) {
+    const k = r();
+    const gp = P.gy(px, pz);
+    if (k < 0.45) {
+      const s = r.range(0.22, 0.3);
+      B.stamp(D.tpl.potLow, mtx(px, gp, pz, r() * 0.4, s), r.pick(['#c9825a', '#8a939c', '#e9e5dc', '#4f7fa8']));
+      B.stamp(D.tpl.blobsLow[Math.floor(r() * 4)], mtx(px, gp + s + s * 0.55, pz, r() * 6, s * 1.25, s * 0.9, s * 1.25), r.pick(LEAF));
+    } else if (k < 0.62) {
+      B.stamp(D.tpl.bucket, mtx(px, gp, pz, 0, 1.1), r.pick(['#4f8fd0', '#e0564a', '#f2c230', '#6fbf8e']));
+    } else if (k < 0.72) {
+      B.stamp(D.tpl.garbageBox, mtx(px, gp, pz + 0.05, 0, 0.9), r.pick(['#6fa37a', '#8a939c', '#5f7f9f']));
+    }
+  }
+}
+
 /** One straight run of fence between a..b at `c` (axis 'x': runs along x at z=c; 'z': along z at x=c). */
-function fenceRun(B, P, D, a, b, c, axis) {
+function fenceRun(B, P, D, a, b, c, axis, type = P.fence, H = P.fenceH, cheap = false) {
   const r = P.r;
-  const type = P.fence;
-  const H = P.fenceH;
   const len = b - a;
   if (len < 0.15) return;
   const n = Math.max(1, Math.ceil(len / 1.8));
@@ -343,11 +407,15 @@ function fenceRun(B, P, D, a, b, c, axis) {
       else B.box(kind, c + t0, y0, sA, c + t1, y1, sB, col, opts);
     };
     const blockUV = (fid, p) => [(axis === 'x' ? p[0] : p[2]) / WALL_U_PERIOD + (fid === 'x' || fid === 'X' ? p[2] : 0), wallV('block', p[1] - g + 0.02)];
+    // shadow proxy: the solid part of the run (lattice / mesh infill lets the light through)
+    const shadowTop = type === 'block' ? H + 0.05 : type === 'hedge' ? H - 0.05 : type === 'mesh' ? 0.25 : 0.3;
+    if (axis === 'x') B.shadowBox(s0, g - 0.2, c - 0.07, s1, g + shadowTop, c + 0.07);
+    else B.shadowBox(c - 0.07, g - 0.2, s0, c + 0.07, g + shadowTop, s1);
     if (type === 'block') {
       box('wall', s0, s1, g - 0.2, g + H, -0.07, 0.07, P.blockColor, { uv: blockUV });
       box('solid', s0 - 0.01, s1 + 0.01, g + H, g + H + 0.05, -0.09, 0.09, '#bdbab3');
       // decorative openwork row on some walls
-      if (P.openwork && s1 - s0 > 1.2) {
+      if (P.openwork && !cheap && s1 - s0 > 1.2) {
         for (let s = s0 + 0.3; s < s1 - 0.4; s += 0.4) box('unlit', s, s + 0.3, g + H - 0.35, g + H - 0.15, -0.071, 0.071, '#8f8c86');
       }
     } else if (type === 'lattice') {
@@ -378,9 +446,11 @@ function fenceRun(B, P, D, a, b, c, axis) {
       box('solid', s0, s1, g - 0.2, g + 0.12, -0.26, 0.26, '#b9b4aa');
       const hc = P.hedgeColor;
       box('leaf', s0 + 0.04, s1 - 0.04, g + 0.1, g + H - 0.16, -0.2, 0.2, shade(hc, -0.05), { skip: 'y' });
-      for (let s = s0 + 0.16; s < s1 - 0.08; s += 0.3) {
+      // lumpy crown: low-poly clumps (the hedge is long, so each clump stays cheap)
+      const step = cheap ? 0.5 : 0.34;
+      for (let s = s0 + 0.16; s < s1 - 0.08; s += step) {
         const [hx, hz] = pt(s + (r() - 0.5) * 0.06);
-        B.stamp(D.tpl.blobs[Math.floor(r() * 4)], mtx(hx, g + H - 0.2 + r() * 0.04, hz, r() * 6, 0.24, 0.16, 0.25), shade(hc, (r() - 0.5) * 0.06));
+        B.stamp(D.tpl.blobsLow[Math.floor(r() * 4)], mtx(hx, g + H - 0.2 + r() * 0.04, hz, r() * 6, 0.27, 0.17, 0.26), shade(hc, (r() - 0.5) * 0.06));
       }
     }
     if (type !== 'hedge' && type !== 'block' && i === n - 1) {
@@ -403,6 +473,7 @@ function gatePosts(B, P, D, gate, fz) {
     }
     const uv = (fid, p) => [(p[0] + p[2]) / WALL_U_PERIOD, wallV(tex ? 'tile' : 'plaster', p[1] - g + 0.4)];
     B.box('wall', x - 0.2, g - 0.2, fz - 0.2, x + 0.2, g + H, fz + 0.2, pc, { uv });
+    B.shadowBox(x - 0.2, g - 0.2, fz - 0.2, x + 0.2, g + H + 0.06, fz + 0.2);
     B.box('solid', x - 0.23, g + H, fz - 0.23, x + 0.23, g + H + 0.06, fz + 0.23, shade(pc, -0.1));
     if (i === 0) {
       // name plate, intercom, mailbox slot on the street face
@@ -494,7 +565,10 @@ function doorstep(B, P, D, hasFence, gate) {
   if (r() < 0.25 && P.yard) {
     const x = (r() < 0.5 ? -1 : 1) * (P.W / 2 - 0.8);
     const z = P.yard.edgeZ - (hasFence ? 0.55 : 0.4);
-    if (P.yard.strip > 1.0 && P.claim(x, z, 0.55)) B.stamp(T.garbageBox, mtx(x, P.gy(x, z), z, 0, 1), r.pick(['#6fa37a', '#8a939c', '#5f7f9f']));
+    if (P.yard.strip > 1.0 && P.claim(x, z, 0.55)) {
+      B.stamp(T.garbageBox, mtx(x, P.gy(x, z), z, 0, 1), r.pick(['#6fa37a', '#8a939c', '#5f7f9f']));
+      B.shadowBox(x - 0.45, P.gy(x, z), z - 0.3, x + 0.45, P.gy(x, z) + 0.72, z + 0.3);
+    }
   }
 }
 
@@ -513,6 +587,7 @@ function bonsaiShelf(B, P, D) {
   const wood = '#8a6446';
   for (const u of [u0 + 0.08, u0 + 1.12]) B.box('solid', u - 0.1, g - 0.05, n - 0.14, u + 0.1, g + 0.35, n + 0.14, '#b9b4aa');
   B.box('solid', u0, g + 0.35, n - 0.18, u0 + 1.2, g + 0.39, n + 0.18, wood);
+  B.shadowBox(u0, g + 0.3, n - 0.18, u0 + 1.2, g + 0.6, n + 0.18);
   for (let i = 0; i < 3; i++) {
     const u = u0 + 0.2 + i * 0.4;
     B.box('solid', u - 0.13, g + 0.39, n - 0.09, u + 0.13, g + 0.47, n + 0.09, r.pick(['#5a4a3e', '#3f4a5a', '#7a5a4a']));
@@ -611,6 +686,7 @@ export function wallAC(B, P, D, f, high) {
   if (floorTop) B.stamp(D.tpl.acBracket, mtx(u, baseY, 0, 0, 1));
   else B.stamp(D.tpl.acBase, mtx(u, g, 0.02, 0, 1));
   B.stamp(D.tpl.ac, mtx(u, baseY, 0.03, 0, 1));
+  B.shadowBox(u - 0.4, baseY + 0.06, 0.03, u + 0.4, baseY + 0.62, 0.32);
   // pipe cover (化粧カバー) from the unit's side up into the wall
   const pu = u + 0.52;
   const topY = floorTop ? baseY + 0.9 : (f.block.floors === 2 && r() < 0.5 ? FOUND + STOREY + 2.05 : FOUND + 1.95);
@@ -717,6 +793,7 @@ function serviceDrop(B, P, D) {
     P.claims.push({ x, z, r: 0.3 });
     const pc = '#a3a8ad';
     B.cyl('metal', [x, g - 0.2, z], [x, dy + 0.35, z], 0.055, pc, 8);
+    B.shadowBox(x - 0.05, g - 0.2, z - 0.05, x + 0.05, dy + 0.4, z + 0.05);
     B.cyl('solid', [x, dy + 0.35, z], [x, dy + 0.4, z], 0.065, '#6b7075', 8);
     B.box('small', x - 0.012, dy - 0.02, z, x + 0.012, dy + 0.0, loc.z, pc);
     B.cyl('small', [x, dy - 0.06, loc.z], [x, dy + 0.03, loc.z], 0.025, '#f2f2ee', 6);
@@ -823,8 +900,11 @@ function gardenPatch(B, P, D) {
   if (P.trad && !hero && r() < 0.6) {
     const a = r() * Math.PI * 2;
     const x = t.x + Math.cos(a) * 1.7, z = t.z + Math.sin(a) * 1.7;
-    if (z < edgeZ - 0.5 && P.claim(x, z, 0.4)) B.stamp(D.tpl.lantern, mtx(x, P.gy(x, z), z, r() * 6, 1));
+    if (z < edgeZ - 0.5 && P.claim(x, z, 0.4)) {
+      B.stamp(D.tpl.lantern, mtx(x, P.gy(x, z), z, r() * 6, 1));
+      B.shadowBox(x - 0.2, P.gy(x, z), z - 0.2, x + 0.2, P.gy(x, z) + 1.0, z + 0.2);
+    }
   }
 }
 
-export { findSpot };
+export { findSpot, fenceRun, shrub, LEAF };

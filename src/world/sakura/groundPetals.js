@@ -53,6 +53,19 @@ function kiteGeometry() {
   return g;
 }
 
+/**
+ * Thin petals stay pink in shade: lift the unlit side toward a pale lilac-pink instead of
+ * letting drifts sink to a grey that reads as grime on the asphalt.
+ */
+function petalLift(shader) {
+  shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>', /* glsl */ `
+    {
+      float sakDirect = dot( reflectedLight.directDiffuse, vec3( 0.3333 ) );
+      outgoingLight += diffuseColor.rgb * vec3( 0.3, 0.25, 0.36 ) * ( 1.0 - smoothstep( 0.05, 0.4, sakDirect ) );
+    }
+    #include <opaque_fragment>`);
+}
+
 /** Box-Muller gaussian. */
 function gauss(rnd) {
   const u = Math.max(1e-6, rnd()), v = rnd();
@@ -138,7 +151,10 @@ export function buildGroundPetals(ctx, infos) {
   // older petals (a day on the ground) are a touch duller / browner
   const old = new THREE.Color('#e6cfc9');
 
+  // low quality: drop ~40% of the fallen petals (decided up front so the layout stays the same)
+  const thin = ctx.quality === 'low' ? mulberry(9191) : null;
   const add = (x, z, opts = {}) => {
+    if (thin && thin() < 0.4) return false;
     const y = opts.y ?? surface(x, z);
     if (y === null || y === undefined) return false;
     const c = cols[Math.floor(rnd() * cols.length)].clone();
@@ -281,7 +297,7 @@ export function buildGroundPetals(ctx, infos) {
   }
 
   // ---- meshes: split by area so each can be frustum-culled ----
-  const mat = toon.mat('#ffffff', { vertexColors: true, side: THREE.DoubleSide, polygonOffset: 2, name: 'sakura_ground_petal' });
+  const mat = toon.mat('#ffffff', { vertexColors: true, side: THREE.DoubleSide, polygonOffset: 2, onShaderKey: 'sakura-petal-lift', onShader: petalLift, name: 'sakura_ground_petal' });
   const geo = petalGeometry();
   const areas = { street: [], station: [], levee: [] };
   for (const it of items) (it.z > 9 ? areas.street : it.z > -52 ? areas.station : areas.levee).push(it);
@@ -309,10 +325,10 @@ function buildRafts(ctx, rnd, cols) {
   const { layout, toon } = ctx;
   const T = layout.TERRAIN;
   const y = T.waterLevel + 0.012;
-  const items = [];
-  const phases = [];
+  const CHUNKS = 4; // split along x so each chunk can be frustum-culled
+  const chunks = Array.from({ length: CHUNKS }, () => ({ items: [], phases: [] }));
   const PERIOD = 60; // metres travelled before a raft recycles
-  const nRafts = 30;
+  const nRafts = ctx.quality === 'low' ? 20 : 30;
   for (let r = 0; r < nRafts; r++) {
     const x0 = -150 + rnd() * 300;
     // hug the south bank more (the levee trees drop them there)
@@ -321,6 +337,7 @@ function buildRafts(ctx, rnd, cols) {
     const ang = (rnd() - 0.5) * 0.25;
     const cnt = Math.round(L * W * 150); // dense: petals almost touching, like a real 花筏
     const ph = rnd() * PERIOD;
+    const { items, phases } = chunks[Math.min(CHUNKS - 1, Math.floor(((x0 + 150) / 300) * CHUNKS))];
     for (let i = 0; i < cnt; i++) {
       const u = (rnd() - 0.5) * L, taper = Math.cos((u / L) * Math.PI);
       const v = gauss(rnd) * W * 0.35 * (0.3 + taper);
@@ -345,10 +362,19 @@ function buildRafts(ctx, rnd, cols) {
     `,
   };
   const mat = toon.mat('#ffffff', { vertexColors: true, side: THREE.DoubleSide, polygonOffset: 2, vertexPatch: patch, name: 'sakura_raft_petal' });
-  const geo = petalGeometry();
-  geo.setAttribute('aPhase', new THREE.InstancedBufferAttribute(new Float32Array(phases), 1));
-  const im = ctx.geom.instanced(geo, mat, items, { castShadow: false, noOutline: true });
-  im.frustumCulled = false; // instances drift beyond their build-time bounds
-  im.name = 'sakura_river_rafts';
-  return im;
+  const group = new THREE.Group();
+  group.name = 'sakura_river_rafts';
+  chunks.forEach(({ items, phases }, k) => {
+    if (!items.length) return;
+    const geo = petalGeometry();
+    geo.setAttribute('aPhase', new THREE.InstancedBufferAttribute(new Float32Array(phases), 1));
+    const im = ctx.geom.instanced(geo, mat, items, { castShadow: false, noOutline: true });
+    // instances drift up to +-PERIOD/2 along x from their build-time spot: widen the bounds
+    im.computeBoundingSphere();
+    im.boundingSphere.radius += PERIOD / 2 + 1;
+    im.frustumCulled = true;
+    im.name = `sakura_river_rafts_${k}`;
+    group.add(im);
+  });
+  return group;
 }

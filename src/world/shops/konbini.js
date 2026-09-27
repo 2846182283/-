@@ -100,9 +100,10 @@ function glassFront(S, F, Z, band0) {
   poster(S, 1.55, F + 1.2, zf, 0.4, 0.13, A.get('pay'));
   poster(S, 1.55, F + 1.5, zf, 0.3, 0.3, A.get('kAtm'));
   poster(S, -1.55, F + 0.95, zf, 0.16, 0.16, A.cell('mascot', 0, 2, 2));
-  // door threshold (stainless) + mat outside
+  // door threshold (stainless).  The mat sits just INSIDE the doors: the
+  // terrain's tactile run ends in a dot pad right at the threshold outside.
   B.box('solid', -1.15, F - 0.01, zf - 0.1, 1.15, F + 0.008, zf + 0.12, '#c9ccd0');
-  B.box('deco', -1.0, F - 0.004, zf + 0.12, 1.0, F + 0.012, zf + 0.9, '#5a6068');
+  B.box('deco', -0.95, F, zf - 0.95, 0.95, F + 0.016, zf - 0.2, '#5a6068');
 }
 
 /** Automatic sliding doors: two dynamic leaves that open when the viewer approaches. */
@@ -246,13 +247,69 @@ function sides(S, F, Z, H, y0, y1) {
     B.box('solid', bx + 0.25, F + 0.9, 0.05, bx + 0.32, F + 1.05, 0.08, '#555b62');
     B.box('solid', bx - 1.4, F + 1.1, 0, bx - 0.9, F + 1.6, 0.18, '#dcdcd6');
     B.box('solid', bx - 2.2, F + 0.6, 0, bx - 1.7, F + 1.2, 0.2, '#8e949a');
-    poster(S, sx < 0 ? -1.2 : 1.2, F + 1.4, 0.0, 0.5, 0.75, A.get(sx < 0 ? 'kPostSpring' : 'kPostBento'), { off: 0.01 });
+    if (sx > 0) poster(S, 1.2, F + 1.4, 0.0, 0.5, 0.75, A.get('kPostBento'), { off: 0.01 });
     downpipe(S, sx < 0 ? 5.7 : -5.7, S.minGround, F + H - 0.1, -0.04, '#b8bcc0');
+    if (sx < 0) plazaSide(S, F, y0);
     B.pop();
   }
   // outdoor AC units at the back corners
   acUnit(S, W / 2 - 1.2, S.rawY(W / 2 - 1.2, -D / 2 - 0.45), -D / 2 - 0.45, Math.PI, { pipeH: 2.4 });
   acUnit(S, W / 2 - 2.2, S.rawY(W / 2 - 2.2, -D / 2 - 0.45), -D / 2 - 0.45, Math.PI, { pipeH: 2.4 });
+}
+
+/**
+ * Extra dressing on the side wall that faces the station plaza / bus stop
+ * (lot -x).  Called inside the side frame: x runs back (-D/2) -> front (+D/2),
+ * +Z points out of the wall, the wall face is at z = 0.
+ */
+function plazaSide(S, F, band0) {
+  const { B, A, W } = S;
+  // ground under a side-frame point (side frame x -> lot z, side z -> lot -x)
+  const gSide = (x, z) => S.rawY(-W / 2 - z, x);
+
+  // second fascia: lit service band (ATM / copy / parcels ...) + a thin stripe under it
+  const sy0 = F + 2.12, sy1 = F + 2.56, sx0 = -0.3, sx1 = 5.7;
+  B.box('solid', sx0 - 0.04, sy0 - 0.04, 0.0, sx1 + 0.04, sy1 + 0.04, 0.09, '#dfe2e0');
+  B.quad('lit', (sx0 + sx1) / 2, (sy0 + sy1) / 2, 0.092, sx1 - sx0, sy1 - sy0, '#f4f4f2', A.get('kServ'));
+  B.box('deco', -5.95, F + 2.62, 0.0, 5.95, F + 2.68, 0.03, STRIPES[0][0]);
+
+  // delivery door (搬入口): steel double leaf, frame, small canopy + bracket lamp
+  const d0 = -2.75, d1 = -1.05, dh = 2.2;
+  B.box('solid', d0 - 0.08, F, 0.0, d1 + 0.08, F + dh + 0.08, 0.05, '#9aa1a8');
+  for (const [a, b] of [[d0, (d0 + d1) / 2 - 0.01], [(d0 + d1) / 2 + 0.01, d1]]) {
+    B.box('solid', a, F + 0.02, 0.05, b, F + dh, 0.07, '#d4d8da');
+    B.box('deco', a + 0.1, F + 1.55, 0.07, b - 0.1, F + 1.9, 0.075, '#bfc4c8'); // pressed panel
+  }
+  for (const hx of [(d0 + d1) / 2 - 0.12, (d0 + d1) / 2 + 0.12]) B.box('solid', hx - 0.015, F + 0.95, 0.07, hx + 0.015, F + 1.2, 0.11, '#555b62');
+  B.box('deco', d0 - 0.08, F - 0.02, 0.0, d1 + 0.08, F + 0.01, 0.25, '#8e949a'); // steel sill plate
+  B.box('solid', d0 - 0.3, F + dh + 0.3, 0.0, d1 + 0.3, F + dh + 0.38, 0.55, '#e8e9e6', { colors: { y: '#d6d8d6' } });
+  B.quad('solid', (d0 + d1) / 2 - 0.35, F + dh + 0.17, 0.052, 0.5, 0.19, '#ffffff', A.sub('kStaff', 0, 0, 0.47, 1));
+  B.quad('deco', (d0 + d1) / 2 + 0.32, F + 1.45, 0.078, 0.34, 0.13, '#ffffff', A.sub('kStaff', 0.5, 0, 0.5, 1));
+  B.box('solid', (d0 + d1) / 2 + 0.25, F + dh + 0.1, 0.0, (d0 + d1) / 2 + 0.43, F + dh + 0.24, 0.12, '#8e949a');
+  B.box('lit', (d0 + d1) / 2 + 0.26, F + dh + 0.07, 0.03, (d0 + d1) / 2 + 0.42, F + dh + 0.1, 0.11, '#fff6dc');
+  // cardboard bales + a folded roll cage by the door (deliveries waiting)
+  const gy = gSide(-0.6, 0.25);
+  B.box('solid', -0.85, gy, 0.02, -0.25, gy + 0.32, 0.4, '#c9a878', { colors: { y: '#d4b688' } });
+  B.box('deco', -0.86, gy + 0.14, 0.02, -0.24, gy + 0.17, 0.41, '#e8e0cc');
+
+  // framed poster case with this season's campaign posters
+  const px0 = 0.2, px1 = 2.9, py0 = F + 0.85, py1 = F + 1.85;
+  B.box('solid', px0, py0, 0.0, px1, py1, 0.05, '#c9ccd0');
+  B.box('inner', px0 + 0.05, py0 + 0.05, 0.05, px1 - 0.05, py1 - 0.05, 0.052, '#f2f2ee');
+  const posters = ['kPostSpring', 'kPostDrink', 'kPostIce', 'kPostBento'];
+  posters.forEach((n, i) => poster(S, px0 + 0.38 + i * 0.64, (py0 + py1) / 2, 0.052, 0.56, 0.84, A.get(n), { off: 0.003 }));
+  B.quad('glassClear', (px0 + px1) / 2, (py0 + py1) / 2, 0.06, px1 - px0 - 0.08, py1 - py0 - 0.08, '#fff');
+
+  // outdoor AC units on a low concrete plinth (pipes run up to the roof)
+  const ay = gSide(4.0, 0.2);
+  B.box('solid', 3.1, ay, 0.0, 4.9, ay + 0.08, 0.36, C.concrete);
+  acUnit(S, 3.5, ay + 0.08, 0.18, 0, { pipeH: 2.0 });
+  acUnit(S, 4.45, ay + 0.08, 0.18, 0, { pipeH: 2.0 });
+
+  // bicycle-parking plate + ATM plate near the front corner
+  B.box('solid', 5.0, F + 1.05, 0.0, 5.6, F + 1.8, 0.03, '#c9ccd0');
+  B.quad('deco', 5.3, F + 1.425, 0.032, 0.54, 0.69, '#ffffff', A.get('kBike'));
+  B.box('solid', 3.35, F + 1.35, 0.0, 3.95, F + 1.95, 0.05, '#ffffff', { rects: { Z: A.get('kAtm') }, kinds: { Z: 'lit' } });
 }
 
 function roofTop(S, y) {

@@ -13,7 +13,8 @@
  *   ?q=low|high           quality
  *   ?sun=az,el            sun azimuth (0 = north, 90 = west) & elevation, degrees
  *   ?debug=layout         draw lot / road / tree footprints
- *   ?shot=1               screenshot mode (no UI, sets window.__sceneReady)
+ *   ?shot=1               screenshot mode (no UI, no web fonts, sets window.__sceneReady)
+ *   ?fonts=0              skip the Google Fonts request (signage uses local Japanese fonts)
  */
 import * as THREE from 'three';
 import { createEngine } from './core/engine.js';
@@ -70,7 +71,15 @@ async function main() {
   window.__stopLoop = () => engine.stop();
 
   setLoad(0.03, '加载字体…');
-  await ensureFonts(shotMode ? 6000 : 3500);
+  // Web fonts (Zen Maru Gothic etc.) for the signage when online; screenshot mode and ?fonts=0 use the
+  // local Japanese fallbacks in canvasTex.FONTS so renders are deterministic and need no network.
+  if (!shotMode && params.get('fonts') !== '0' && navigator.onLine !== false) {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Noto+Sans+JP:wght@400;700&family=Shippori+Mincho:wght@700&family=Zen+Maru+Gothic:wght@500;700&display=swap';
+    document.head.appendChild(link);
+    await ensureFonts(3500);
+  }
 
   const only = params.get('only')?.split(',').filter(Boolean);
   const skip = params.get('skip')?.split(',').filter(Boolean) || [];

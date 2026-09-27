@@ -825,7 +825,7 @@ function buildPoles() {
   // main street: alternate sides every ~23 m
   for (const side of [-1, 1]) {
     const line = [];
-    let s = MAIN_STREET.atZ(side < 0 ? 14 : 25).s;
+    let s = MAIN_STREET.atZ(side < 0 ? 20.5 : 25).s; // west line starts past the café corner (keeps the hero junction clear)
     let k = 0;
     while (s < MAIN_STREET.length - 10) {
       const p = MAIN_STREET.offsetAtS(s, side * 3.85);
@@ -850,7 +850,13 @@ function buildPoles() {
     let k = 0;
     for (let x = sf.from + 8; x < sf.to - 5; x += 24) {
       if (Math.abs(x) < 7) continue; // keep the junction clear
-      line.push({ id: `PSF${k}`, x, z: sf.z + 3.95, y: groundY(x, sf.z + 3.95), rotY: Math.PI / 2, transformer: k % 3 === 0, streetLight: k % 2 === 1, side: 1 });
+      // step aside from shop fronts on this kerb (e.g. the tabako kiosk)
+      let px = x;
+      for (const l of LOTS) {
+        if (l.street !== 'stationFront' || l.type === 'house' || l.front.dirZ >= 0) continue;
+        if (Math.abs(px - l.x) < l.width / 2 + 0.8) px = l.x - l.width / 2 - 1.4;
+      }
+      line.push({ id: `PSF${k}`, x: px, z: sf.z + 3.95, y: groundY(px, sf.z + 3.95), rotY: Math.PI / 2, transformer: k % 3 === 0, streetLight: k % 2 === 1, side: 1 });
       k++;
     }
     lines.push({ id: 'stationFront-S', poles: line });
@@ -904,13 +910,12 @@ export const SPOTS = {
   // convex traffic mirrors at junctions (poles.js)
   mirrors: [
     { x: 4.4, z: 11.2, y: groundY(4.4, 11.2), rotY: -2.3 },
-    { x: -4.6, z: 11.0, y: groundY(-4.6, 11.0), rotY: 2.3 },
     { x: 35.4, z: 3.6, y: 0, rotY: -2.6 },
     { x: 29.0, z: -44.0, y: 0, rotY: 0.8 },
   ],
   // traffic signs (poles.js).  type: speed30 | noParking | schoolRoute | direction | stop | oneWay | pedestrianPriority | railwayCrossingAhead
   signs: [
-    { ...streetSpot(20, 1, 3.8), type: 'direction', text: ['桜ヶ丘駅', '春日野 2km', '花見台 1.5km'] },
+    { ...streetSpot(28.3, 1, 3.8), type: 'direction', text: ['桜ヶ丘駅', '春日野 2km', '花見台 1.5km'] },
     { ...streetSpot(40, -1, 3.8), type: 'speed30' },
     { ...streetSpot(52, 1, 3.8), type: 'noParking' },
     { ...streetSpot(88, -1, 3.8), type: 'schoolRoute' },
@@ -968,8 +973,22 @@ export const SPOTS = {
 {
   // parked along the pedestrian shoulder (between the white edge line and the gutter), clear of poles
   const poles = POLE_LINES.flatMap((l) => l.poles);
-  for (const [z0, side] of [[19, -1], [30.5, -1], [33, 1], [47, -1], [53.5, -1], [70, 1], [85, -1]]) {
-    let z = z0;
+  // snap each wanted spot to the nearest gap between consecutive main-street lots on that side,
+  // so bikes never block a shop door or display
+  const gapZ = (z0, side) => {
+    const fronts = LOTS.filter((l) => l.street === 'main' && l.side === side).map((l) => {
+      const a = MAIN_STREET.atS(l.s - l.width / 2).z, b = MAIN_STREET.atS(l.s + l.width / 2).z;
+      return [Math.min(a, b), Math.max(a, b)];
+    }).sort((a, b) => a[0] - b[0]);
+    let best = z0, bd = Infinity;
+    for (let i = 0; i < fronts.length - 1; i++) {
+      const g = (fronts[i][1] + fronts[i + 1][0]) / 2;
+      if (Math.abs(g - z0) < bd) { bd = Math.abs(g - z0); best = g; }
+    }
+    return best;
+  };
+  for (const [z0, side] of [[23, -1], [31, -1], [37, 1], [47, -1], [59, -1], [70, 1], [85, -1]]) {
+    let z = gapZ(z0, side);
     for (let k = 0; k < 8; k++) {
       const p = streetSpot(z, side, 3.55);
       if (!poles.some((q) => Math.hypot(q.x - p.x, q.z - p.z) < 1.4)) break;

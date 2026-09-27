@@ -20,8 +20,13 @@ npm run dev        # open the printed URL (default http://localhost:5173)
 npm run build      # static build in dist/ (relative paths; any static host works)
 ```
 
-A desktop GPU is recommended. The renderer lowers its resolution on slower
-machines to hold the frame rate, and `?q=low` forces the light preset (see the URL parameters below).
+A desktop GPU is recommended. A frame renders the scene in three passes: the
+shadow map, the outline pre-pass and the main pass. Across those passes the
+full scene draws about 3.6–5.2M triangles and 460–880 draw calls, depending on
+the view. The shadow map is only re-rendered when it needs to be, trees and
+street furniture are culled in chunks, and cherry trees switch detail with
+distance. The renderer also lowers its resolution on slower machines to hold
+the frame rate, and `?q=low` forces the light preset (see the URL parameters below).
 
 ## Controls
 
@@ -112,3 +117,5 @@ node scripts/shot.mjs --params "view=hero" --out shots/hero.png
 
 This renders with Playwright Chromium using software WebGL, prints draw calls,
 triangle counts and per-module build times, and fails if any module throws.
+It needs a Chromium build for Playwright (`npx playwright install chromium`).
+Use `--batch file.json` to render several views in one run.

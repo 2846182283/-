@@ -40,6 +40,21 @@ belongs in layout.js. Modules must not place objects inside space that layout
 assigns to another module (lots → houses/shops, trees → sakura, poles → poles,
 SPOTS.vending/bicycles/vehicles → props, SPOTS.people → people, …).
 
+Other shared data in layout.js:
+
+- `ROADS.lanes`: narrow residential lanes (路地) behind the street frontage.
+  They are served by ~98 `filler: true` lots, which houses.js builds as cheap
+  simple houses. terrain.js draws the lanes and the plots left empty along them.
+- `BRIDGE`: the footbridge over the river (built by terrain.js). The river
+  itself is blocked in walk mode except on the bridge (`RIVER_BLOCK`).
+- `surfaceY(x, z)`: the top of the paving, i.e. `groundY` plus a small lift
+  (roads +0.03, plaza and aprons +0.07, konbini forecourt +0.11). Use it for
+  anything that stands on paved ground.
+- `platformY(x)`: the platform surface height, including the end ramps.
+- `walkFloorY(x, z)`: the floor used in walk mode. It covers the platforms,
+  the station stairs and ramp, both level-crossing decks, the ballast and the
+  bridge.
+
 ### Lot convention
 
 `lot = { id, type, x, z, y, rotY, width, depth, floors, setback, front, toWorld(lx, lz), drop, corners, gardenTree?, simple? }`

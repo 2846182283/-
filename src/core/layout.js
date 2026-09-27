@@ -866,7 +866,8 @@ function buildPoles() {
   {
     const cr = ROADS.crossingRoad;
     const line = [];
-    for (const z of [4.5, -8, -45.5]) line.push({ id: `PCR${line.length}`, // -8: clear of lane LNE's mouth (z -12.8) x: cr.x + 2.55, z, y: groundY(cr.x + 2.55, z), rotY: 0, transformer: false, streetLight: true, side: 1 });
+    // z = -8 keeps the middle pole clear of lane LNE's mouth (z -12.8)
+    for (const z of [4.5, -8, -45.5]) line.push({ id: `PCR${line.length}`, x: cr.x + 2.55, z, y: groundY(cr.x + 2.55, z), rotY: 0, transformer: false, streetLight: true, side: 1 });
     lines.push({ id: 'crossing-E', poles: line });
   }
   // north road, north edge

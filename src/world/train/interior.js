@@ -283,6 +283,14 @@ export function passengers(P, kind, rng, opts = {}) {
     P.sphere('inner', 0.1, x + 0.06, 2.74, z, SKIN[0], 1, 1.05, 1, 7, 5);
     P.cyl('inner', 0.115, 0.11, 0.07, x + 0.05, 2.84, z, '#2b3350', { seg: 10 });
     P.box('inner', 0.12, 0.015, 0.2, x + 0.15, 2.81, z, '#1f2436');
+    // simple anime face on the +x side of the head: eyes, brows, mouth, sideburns
+    const fx = x + 0.06 + 0.094;
+    for (const k of [-1, 1]) {
+      P.sphere('innerNO', 0.016, fx, 2.745, z + k * 0.036, '#2e2630', 0.5, 1.35, 1, 6, 4);
+      P.box('innerNO', 0.012, 0.009, 0.036, fx - 0.004, 2.778, z + k * 0.04, '#3a2c2a', 0, 0, 0);
+      P.box('innerNO', 0.05, 0.06, 0.02, x + 0.07, 2.76, z + k * 0.095, '#3a2c2a'); // hair below the cap
+    }
+    P.box('innerNO', 0.01, 0.006, 0.03, fx - 0.006, 2.697, z, '#b8736e');
     for (const k of [-1, 1]) {
       P.capsule('inner', 0.07, [x, 2.06, z + k * 0.1], [x + 0.4, 2.08, z + k * 0.1], '#2f3a55');
       P.capsule('inner', 0.045, [x + 0.04, 2.48, z + k * 0.18], [x + 0.36, 2.4, z + k * 0.12], '#2f3a55');

@@ -193,6 +193,7 @@ export function buildBuilding(kit, S, parent, clocks) {
     kit.beam(g, M.vc, COLORS.roof, V(-0.8, 2.55, 0.0), V(0.8, 2.55, 0.0), 0.7, 0.05, { up: V(0, 1, 0.3).normalize() });
     kit.decal(g, S.officeDoor, 0.5, 0.15, 0, 1.65, 0.01 - 0.09, 0);
   }
+  buildEastEnd(kit, S, parent);
 
   // ---------------- roof ----------------
   buildRoof(kit, parent);
@@ -200,6 +201,51 @@ export function buildBuilding(kit, S, parent, clocks) {
   buildEntrance(kit, S, parent);
   buildFacadeDetails(kit, S, parent, clocks);
   buildGarden(kit, parent);
+}
+
+// ---------------------------------------------------------------------------
+/**
+ * East end (seen from platform 1): wall-mounted AC outdoor unit on brackets
+ * with its cream pipe duct, an electric conduit + meter box running up to the
+ * eave, a vertical 駅務室 name plate and a small lamp by the staff door.
+ */
+function buildEastEnd(kit, S, parent) {
+  const { M } = kit;
+  const xw = B.xMax; // outer wall face
+  // AC outdoor unit on wall brackets, north of the staff door
+  {
+    const z0 = -23.65, z1 = -22.85, y0 = 2.35, y1 = 2.95;
+    for (const z of [z0 + 0.1, z1 - 0.1]) {
+      kit.bx(parent, M.metal, '#8f969d', xw, xw + 0.42, y0 - 0.05, y0, z - 0.02, z + 0.02);
+      kit.beam(parent, M.metal, '#8f969d', V(xw, y0 - 0.45, z), V(xw + 0.4, y0 - 0.03, z), 0.03, 0.03);
+    }
+    kit.bx(parent, M.metal, '#e8e8e2', xw + 0.04, xw + 0.34, y0, y1, z0, z1);
+    kit.cyl(parent, M.vc, '#8e949b', 0.2, 0.2, 0.01, xw + 0.34, y0 + 0.3, z0 + 0.33, 16, { rz: -Math.PI / 2, noOutline: true });
+    for (let i = -2; i <= 2; i++) kit.bx(parent, M.vc, '#6f757c', xw + 0.345, xw + 0.355, y0 + 0.29 + i * 0.07, y0 + 0.31 + i * 0.07, z0 + 0.15, z0 + 0.52, { noOutline: true });
+    kit.bx(parent, M.vc, '#c9c9c2', xw + 0.345, xw + 0.35, y0 + 0.08, y1 - 0.08, z1 - 0.17, z1 - 0.05, { noOutline: true });
+    // pipe duct: out of the unit's side, up the wall and into it under the eave
+    kit.bx(parent, M.vc, '#e9e2cf', xw, xw + 0.09, y0 + 0.15, y0 + 0.25, z1, z1 + 0.35);
+    kit.bx(parent, M.vc, '#e9e2cf', xw, xw + 0.09, y0 + 0.15, 3.75, z1 + 0.25, z1 + 0.35);
+    kit.bx(parent, M.vc, '#d7cfba', xw, xw + 0.1, 3.72, 3.8, z1 + 0.22, z1 + 0.38);
+    // drain hose dripping to a small gravel patch
+    kit.tube(parent, M.vc, '#3a3d44', [V(xw + 0.2, y0, z0 + 0.1), V(xw + 0.25, y0 - 0.8, z0 + 0.05), V(xw + 0.3, 0.05, z0 + 0.1)], 0.012, 5);
+    kit.cyl(parent, M.vc, '#9a958c', 0.2, 0.22, 0.03, xw + 0.3, 0, z0 + 0.1, 10, { noOutline: true });
+  }
+  // electric conduit from a meter box to the eave
+  {
+    const z = -19.9;
+    kit.bx(parent, M.metal, '#dcdcd4', xw, xw + 0.14, 1.3, 1.78, z - 0.2, z + 0.2);
+    kit.bx(parent, M.lamp, '#f0f2ea', xw + 0.141, xw + 0.142, 1.52, 1.66, z - 0.12, z + 0.02, { noOutline: true, cast: false });
+    kit.cyl(parent, M.metal, '#b9bcc0', 0.025, 0.025, B.eaveY - 0.3 - 1.78, xw + 0.06, 1.78, z + 0.1, 8);
+    kit.cyl(parent, M.metal, '#b9bcc0', 0.025, 0.025, 1.3 - 0.05, xw + 0.06, 0.05, z - 0.08, 8);
+    for (const y of [0.6, 2.4, 3.2]) kit.bx(parent, M.metal, '#7c838b', xw, xw + 0.09, y, y + 0.04, z + (y > 1.5 ? 0.06 : -0.12), z + (y > 1.5 ? 0.14 : -0.04), { noOutline: true });
+  }
+  // 駅務室 name plate beside the staff door + a small bracket lamp under the hood
+  kit.bx(parent, M.wood, '#b8946c', xw, xw + 0.025, 1.15, 2.05, -22.62, -22.34, { uv: [1, 1] });
+  kit.decal(parent, S.ekimuPlate, 0.24, 0.8, xw + 0.027, 1.6, -22.48, Math.PI / 2);
+  kit.bx(parent, M.metal, '#4a4d52', xw, xw + 0.18, 2.4, 2.44, -21.64, -21.56);
+  kit.cyl(parent, M.lamp, '#ffe6b0', 0.07, 0.07, 0.12, xw + 0.18, 2.28, -21.6, 10, { noOutline: true, cast: false });
+  kit.cyl(parent, M.metal, '#4a4d52', 0.02, 0.09, 0.05, xw + 0.18, 2.4, -21.6, 10);
 }
 
 // ---------------------------------------------------------------------------
@@ -256,8 +302,10 @@ function buildRoof(kit, parent) {
     const g = new THREE.Group();
     g.position.set(vx, 5.05, ZC);
     g.rotation.y = s > 0 ? Math.PI / 2 : -Math.PI / 2;
-    kit.bx(g, M.vc, COLORS.trim, -0.45, 0.45, -0.3, 0.3, 0, 0.05);
-    for (let i = 0; i < 5; i++) kit.bx(g, M.vc, '#8b8f96', -0.38, 0.38, -0.24 + i * 0.12, -0.2 + i * 0.12, 0.03, 0.09);
+    kit.bx(g, M.vc, COLORS.trim, -0.62, 0.62, -0.4, 0.4, 0, 0.06);
+    kit.bx(g, M.vc, '#5f636a', -0.54, 0.54, -0.33, 0.33, 0.06, 0.065, { noOutline: true });
+    for (let i = 0; i < 6; i++) kit.box(g, M.vc, '#9a9ea5', 1.06, 0.035, 0.1, 0, -0.27 + i * 0.105, 0.1, { rx: 0.6, noOutline: i > 0 && i < 5 });
+    kit.box(g, M.vc, COLORS.trim, 1.4, 0.08, 0.14, 0, 0.46, 0.08); // drip hood
     parent.add(g);
   }
 

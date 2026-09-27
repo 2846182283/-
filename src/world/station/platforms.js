@@ -44,6 +44,12 @@ export function doorPositions(track) {
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
+/**
+ * Sheet-metal fence sign: matte off-white edge (not the bright metal, which
+ * glows in backlight) and a grey primer back with rivets + inventory sticker.
+ */
+export const SIGN_PLATE = (kit, S, thick = 0.02) => ({ thick, frameColor: '#d6d6d0', frameMat: kit.M.vc, back: S.signBack });
+
 /** Surface height of the platform walkway at x (flat top, ramps, landing). */
 export function platY(x) {
   if (x >= PLAT.xRampW && x <= PLAT.xRampE) return PT;
@@ -67,6 +73,7 @@ export function buildPlatforms(kit, S, parent) {
     buildSurface(kit, S, P, parent);
     buildFences(kit, S, P, parent);
     buildEnds(kit, S, P, parent);
+    buildBackWall(kit, S, P, parent);
   }
   buildGreenery(kit, parent);
 }
@@ -168,9 +175,11 @@ function buildSurface(kit, S, P, parent) {
     guide(PLAT.xRampW + 0.3, -8, zAt(2.5), zAt(2.22), true);
   }
 
-  // floor text on the ramps
-  kit.decal(parent, S.ashimoto, 1.3, 0.36, PLAT.xRampW + 0.75, PT + 0.004, zmidIn, Math.PI / 2, { rx: -Math.PI / 2, mat: kit.matFor(S.ashimoto, 'floor') });
-  kit.decal(parent, S.ashimoto, 1.3, 0.36, PLAT.xRampE - 0.75, PT + 0.004, zmidIn, -Math.PI / 2, { rx: -Math.PI / 2, mat: kit.matFor(S.ashimoto, 'floor') });
+  // 足元注意 floor text before the ramps, on plain paving clear of the guide-block line
+  // (west: between the edge strip and the P1 guide line / behind the P2 guide line)
+  const zWest = P.id === 'P1' ? zAt(2.12) : zAt(3.12);
+  kit.decal(parent, S.ashimoto, 1.0, 0.28, PLAT.xRampW + 0.75, PT + 0.004, zWest, Math.PI / 2, { rx: -Math.PI / 2, mat: kit.matFor(S.ashimoto, 'floor') });
+  kit.decal(parent, S.ashimoto, 1.0, 0.28, PLAT.xRampE - 0.75, PT + 0.004, zmidIn, -Math.PI / 2, { rx: -Math.PI / 2, mat: kit.matFor(S.ashimoto, 'floor') });
 
   // petals & grit collected along the back edge / in corners
   const rng = kit.ctx.rng(P.num * 97 + 5);
@@ -274,7 +283,7 @@ function buildEnds(kit, S, P, parent) {
     g.position.set(x - 0.06, y + 0.75, (za + zb) / 2 + 0.9);
     g.rotation.y = -Math.PI / 2;
     parent.add(g);
-    kit.board(g, S.noEntry, 0.46, 0.59, 0, 0, 0, 0, { thick: 0.02, frameColor: '#ffffff' });
+    kit.board(g, S.noEntry, 0.46, 0.59, 0, 0, 0, 0, SIGN_PLATE(kit, S));
     kit.colliders.push([x - 0.2, x + 0.2, zlo, zhi]);
   }
   // --- west end: fence across the landing end + sign ---
@@ -296,7 +305,7 @@ function buildEnds(kit, S, P, parent) {
     g.position.set(x + 0.05, y + 0.7, za + (zb - za) * 0.2);
     g.rotation.y = Math.PI / 2;
     parent.add(g);
-    kit.board(g, S.noEntry, 0.4, 0.51, 0, 0, 0, 0, { thick: 0.02, frameColor: '#ffffff' });
+    kit.board(g, S.noEntry, 0.4, 0.51, 0, 0, 0, 0, SIGN_PLATE(kit, S));
     kit.colliders.push([x - 0.2, x + 0.2, zlo, zhi]);
   }
 
@@ -340,6 +349,90 @@ function buildEnds(kit, S, P, parent) {
   };
   if (P.id === 'P1') { box(PLAT.xRampEnd + 1.1, zB - 0.6, 0.9, 0.55, 1.0); box(PLAT.xLandW - 1.6, zB - 0.8, 0.6, 0.45, 0.8); }
   else { box(PLAT.xRampEnd + 1.0, zB + 0.7, 0.8, 0.5, 0.9); }
+}
+
+// ---------------------------------------------------------------------------
+/**
+ * Back retaining wall of a platform (the side facing the plaza / the fields):
+ * PVC weep-hole pipes every ~3 m with a dark damp run below each, a couple of
+ * 'ホーム下 立入禁止' plates, a cable conduit with clips, and a dandelion /
+ * weed fringe along the foot.
+ */
+function buildBackWall(kit, S, P, parent) {
+  const { M, ctx } = kit;
+  const B = STATION.building;
+  const s = -P.s; // outward normal (z) of the back face
+  const zw = P.zB; // wall face
+  const rng = ctx.rng(P.num * 131 + 9);
+  const x0 = PLAT.xRampW + 1.0, x1 = PLAT.xRampE - 0.5;
+  const outside = (x) => P.id !== 'P1' || x < B.xMin - 0.4 || x > B.xMax + 0.4;
+  const trees = TREES.filter((t) => Math.abs(t.z - zw) < 3);
+  const nearTree = (x) => trees.some((t) => Math.abs(t.x - x) < 0.9);
+
+  const pipe = new THREE.CylinderGeometry(0.035, 0.035, 0.08, 8, 1, true);
+  pipe.rotateX(Math.PI / 2);
+  const hole = new THREE.CircleGeometry(0.028, 8);
+  if (s < 0) hole.rotateY(Math.PI);
+  for (let x = x0; x < x1; x += 3.0) {
+    if (!outside(x)) continue;
+    const y = 0.32 + rng.range(-0.03, 0.03);
+    const g = pipe.clone();
+    g.translate(x, y, zw + s * 0.03);
+    kit.add(parent, g, M.vc, '#c9cbc6', { noOutline: true, cast: false });
+    const h = hole.clone();
+    h.translate(x, y, zw + s * 0.066);
+    kit.add(parent, h, M.vc, '#34363a', { noOutline: true, cast: false });
+    // damp run: two thin darker streaks below the pipe (flat paint strips)
+    const len = rng.range(0.12, 0.26);
+    kit.bx(parent, M.paint, '#a9aaa5', x - 0.03, x + 0.03, Math.max(0.01, y - 0.03 - len), y - 0.03, Math.min(zw, zw + s * 0.004), Math.max(zw, zw + s * 0.004), { noOutline: true, cast: false });
+    kit.bx(parent, M.paint, '#b5b6b1', x - 0.06, x - 0.035, Math.max(0.01, y - 0.05 - len * 0.6), y - 0.04, Math.min(zw, zw + s * 0.004), Math.max(zw, zw + s * 0.004), { noOutline: true, cast: false });
+  }
+  // rain streaks under the coping at a few spots (paint strips, broken lengths)
+  for (let x = x0 + 0.7; x < x1; x += rng.range(1.2, 2.6)) {
+    if (!outside(x)) continue;
+    const len = rng.range(0.25, 0.7), w = rng.range(0.03, 0.08);
+    kit.bx(parent, M.paint, rng.pick(['#b7b8b3', '#bdbdb7', '#aeb0ab']), x, x + w, PT - 0.02 - len, PT - 0.02, Math.min(zw, zw + s * 0.004), Math.max(zw, zw + s * 0.004), { noOutline: true, cast: false });
+  }
+  // cable conduit with clips along the wall at 1.0 m
+  const cx0 = P.id === 'P1' ? B.xMax + 0.4 : x0, cx1 = P.id === 'P1' ? x1 : x1;
+  kit.rod(parent, M.metal, '#9ea3a8', 0.022, 'x', cx0, cx1, 1.02, zw + s * 0.03, 6, { noOutline: true });
+  for (let x = cx0 + 0.3; x < cx1; x += 1.5) kit.bx(parent, M.metal, '#7c838b', x - 0.02, x + 0.02, 0.99, 1.05, Math.min(zw, zw + s * 0.06), Math.max(zw, zw + s * 0.06), { noOutline: true });
+  // enamel plates
+  const plates = P.id === 'P1' ? [-37.2, -19.6, 11.8] : [-30.5, 0.5];
+  for (const x of plates) {
+    const g = new THREE.Group();
+    g.position.set(x, 0.95, zw + s * 0.012);
+    g.rotation.y = s > 0 ? 0 : Math.PI;
+    parent.add(g);
+    kit.board(g, S.underPlat, 0.48, 0.2, 0, 0, 0, 0, { thick: 0.012, frame: 0.008, frameMat: M.vc, frameColor: '#cfcfc9' });
+  }
+  // dandelions, daisies and weeds hugging the wall foot
+  const blade = new THREE.ConeGeometry(0.02, 1, 3);
+  blade.translate(0, 0.5, 0);
+  for (let x = x0 - 0.8; x < x1 + 3; x += rng.range(0.25, 0.7)) {
+    if (!outside(x) || nearTree(x)) continue;
+    const z = zw + s * rng.range(0.04, 0.22);
+    const n = 3 + Math.floor(rng() * 4);
+    for (let i = 0; i < n; i++) {
+      const g = blade.clone();
+      g.scale(1, rng.range(0.12, 0.34), 1);
+      g.rotateZ(rng.range(-0.5, 0.5));
+      g.rotateY(rng() * 6.28);
+      g.translate(x + rng.range(-0.08, 0.08), 0, z + rng.range(-0.04, 0.04));
+      kit.add(parent, g, M.vc, rng.pick(['#88b36a', '#7fa865', '#9cc27a', '#6f9a5a']), { noOutline: true, cast: false });
+    }
+    if (rng.chance(0.45)) {
+      const h = rng.range(0.1, 0.24);
+      const fx = x + rng.range(-0.1, 0.1);
+      const st = new THREE.CylinderGeometry(0.005, 0.005, h, 3);
+      st.translate(fx, h / 2, z);
+      kit.add(parent, st, M.vc, '#6f9a5a', { noOutline: true, cast: false });
+      const dand = rng.chance(0.6);
+      kit.sphere(parent, M.vc, dand ? '#f6cf35' : '#fbfbf6', dand ? 0.03 : 0.032, fx, h, z, { sy: dand ? 0.55 : 0.3, ws: 7, hs: 4, noOutline: true, cast: false });
+      if (!dand) kit.sphere(parent, M.vc, '#f2c230', 0.012, fx, h + 0.008, z, { ws: 5, hs: 3, noOutline: true, cast: false });
+      kit.sphere(parent, M.vc, '#7fa865', 0.06, fx, 0.01, z, { sy: 0.2, ws: 6, hs: 3, noOutline: true, cast: false });
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

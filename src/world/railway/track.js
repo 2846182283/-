@@ -11,7 +11,10 @@
  */
 import * as THREE from 'three';
 import { RAIL } from '../../core/layout.js';
-import { TRK, ZONE, sweep, wobble, inPlatformX, inCrossing, inInternalCrossing, inRange, isNear, jitter, mtx, paint, openBox } from './common.js';
+import {
+  TRK, ZONE, CHUNK_EDGES, sweep, wobble, inPlatformX, inCrossing, inInternalCrossing, inRange, isNear, jitter, mtx, paint, openBox,
+  chunkOf, chunkSpans, chunkOutlined, thinner,
+} from './common.js';
 
 // ---------------------------------------------------------------------------
 // rail profile
@@ -115,6 +118,30 @@ function buildBed(K) {
 }
 
 // ---------------------------------------------------------------------------
+// per-chunk instancing
+// ---------------------------------------------------------------------------
+/**
+ * Build one InstancedMesh per x chunk from records {x, m: Matrix4, color?}.
+ * opts.outline(chunk) -> false marks that chunk's mesh noOutline.
+ */
+export function chunkedInstances(K, geo, material, list, name, opts = {}) {
+  const per = CHUNK_EDGES.slice(1).map(() => []);
+  for (const r of list) per[chunkOf(r.x)].push(r);
+  const c = new THREE.Color();
+  per.forEach((recs, i) => {
+    if (!recs.length) return;
+    const outlined = opts.outline ? opts.outline(i) : !opts.noOutline;
+    const im = K.geom.instanced(geo, material, recs.map((r) => r.m), { castShadow: !!opts.cast, noOutline: !outlined });
+    if (recs[0].color) {
+      recs.forEach((r, j) => im.setColorAt(j, c.set(r.color)));
+      im.instanceColor.needsUpdate = true;
+    }
+    im.name = `railway:${name}@${i}`;
+    K.add(im);
+  });
+}
+
+// ---------------------------------------------------------------------------
 // sleepers
 // ---------------------------------------------------------------------------
 function sleeperGeometry() {
@@ -138,7 +165,6 @@ export function sleeperXs(track, K) {
 }
 
 function buildSleepers(K) {
-  const { THREE: T } = K;
   const geo = sleeperGeometry();
   const list = [];
   for (const track of [TRK.A, TRK.B]) {
@@ -154,13 +180,10 @@ function buildSleepers(K) {
   }
   // crossover timbers (long, brown synthetic / wooden) spanning both tracks
   for (const t of K.timbers || []) list.push({ x: t.x, y: 0, z: t.z, ry: t.ry || 0, sz: t.len / 2, color: t.color });
-  const mats = list.map((t) => mtx(t.x, t.y, t.z, 0, t.ry, 0, 1, 1, t.sz || 1));
-  const im = K.geom.instanced(geo, K.M.inst, mats, { castShadow: false });
-  const c = new T.Color();
-  list.forEach((t, i) => im.setColorAt(i, c.set(t.color)));
-  im.instanceColor.needsUpdate = true;
-  im.name = 'railway:sleepers';
-  K.add(im);
+  const recs = list.map((t) => ({ x: t.x, m: mtx(t.x, t.y, t.z, 0, t.ry, 0, 1, 1, t.sz || 1), color: t.color }));
+  // far from the station the outline pass would only draw a grey comb: no outlines there
+  chunkedInstances(K, geo, K.M.inst, recs, 'sleepers', { outline: chunkOutlined });
+  K.stats.sleepers = list.length;
 }
 
 // ---------------------------------------------------------------------------
@@ -231,15 +254,14 @@ function buildFastenings(K) {
     for (const x of sleeperXs(track, K)) {
       if (!isNear(x)) continue;
       if (inCrossing(x, 0.3)) continue; // under the crossing deck
-      const list = inRange(x, ZONE.detail) ? fullM : liteM;
-      for (const s of [-1, 1]) list.push(mtx(x, 0, track.z + s * RO));
+      // one fastening type per chunk (one draw call): full clips in the chunks around the platforms
+      const c = chunkOf(x);
+      const list = inRange((CHUNK_EDGES[c] + CHUNK_EDGES[c + 1]) / 2, ZONE.detail) ? fullM : liteM;
+      for (const s of [-1, 1]) list.push({ x, m: mtx(x, 0, track.z + s * RO) });
     }
   }
-  for (const [geo, ms, name] of [[full, fullM, 'fastenings'], [lite, liteM, 'fasteningsLite']]) {
-    const im = K.geom.instanced(geo, K.M.fast, ms, { castShadow: false, noOutline: true });
-    im.name = `railway:${name}`;
-    K.add(im);
-  }
+  chunkedInstances(K, full, K.M.fast, fullM, 'fastenings', { noOutline: true });
+  chunkedInstances(K, lite, K.M.fast, liteM, 'fasteningsLite', { noOutline: true });
 }
 
 // ---------------------------------------------------------------------------
@@ -265,7 +287,8 @@ function buildRails(K) {
       const z = track.z + s * RO;
       for (let i = 0; i < cuts.length - 1; i++) {
         const x0 = cuts[i] + (i ? gap : 0), x1 = cuts[i + 1] - (i < cuts.length - 2 ? gap : 0);
-        addRail(K, [{ x: x0, z }, { x: x1, z }]);
+        // invisible (gap-free) cuts at chunk edges keep every merged chunk compact
+        for (const [a, b] of chunkSpans(x0, x1)) addRail(K, [{ x: a, z }, { x: b, z }]);
       }
     }
     // joint hardware near the walkable area
@@ -302,11 +325,13 @@ export function addJoint(K, x, z, outward) {
 // ---------------------------------------------------------------------------
 function buildStones(K) {
   const rng = K.rng(404);
+  const keep = thinner(K.rng(405), K.density);
   const geo = new THREE.OctahedronGeometry(1, 0);
   const cols = ['#8e8983', '#7a756f', '#6a6560', '#937f6e', '#b1aba2', '#827d78', '#7d6a5c'];
   const list = [];
   const push = (x, z, sMin, sMax, yOff = 0) => {
     const s = sMin + rng() * (sMax - sMin);
+    if (!keep()) return;
     const y = bedHeight(x, z) + s * 0.35 + yOff;
     list.push({ x, y, z, rx: rng() * 3, ry: rng() * 6.3, rz: rng() * 3, sx: s * (0.9 + rng() * 0.5), sy: s * (0.55 + rng() * 0.3), sz: s * (0.8 + rng() * 0.4), color: jitter(rng.pick(cols), rng, 0.04) });
   };
@@ -331,13 +356,8 @@ function buildStones(K) {
       push(x + rng() * 0.2, tr + dz, 0.025, 0.04);
     }
   }
-  const mats = list.map((t) => mtx(t.x, t.y, t.z, t.rx, t.ry, t.rz, t.sx, t.sy, t.sz));
-  const im = K.geom.instanced(geo, K.M.inst, mats, { castShadow: false, noOutline: true });
-  const c = new THREE.Color();
-  list.forEach((t, i) => im.setColorAt(i, c.set(t.color)));
-  im.instanceColor.needsUpdate = true;
-  im.name = 'railway:stones';
-  K.add(im);
+  const recs = list.map((t) => ({ x: t.x, m: mtx(t.x, t.y, t.z, t.rx, t.ry, t.rz, t.sx, t.sy, t.sz), color: t.color }));
+  chunkedInstances(K, geo, K.M.inst, recs, 'stones', { noOutline: true });
   K.stats.stones = list.length;
 }
 

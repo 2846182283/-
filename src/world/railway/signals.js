@@ -147,13 +147,41 @@ export function buildSignals(K) {
     }
     return false;
   };
+  // --- starting signals (出発信号): held at danger during the platform dwell ---
+  // A start signal clears only once the doors of the train standing behind it
+  // have been shut for CLEAR_AFTER seconds (~2-3 s before departure).  While
+  // the train has arrived but not opened its doors yet, it stays at danger too.
+  // (If the dwell was jumped into with closed doors, e.g. a paused screenshot,
+  // the doors are assumed to have closed already.)
+  const CLEAR_AFTER = 2.5;
+  const newDwell = () => ({ active: false, fromStart: false, opened: false, shutAt: -1, hold: false });
+  const dwell = { A: newDwell(), B: newDwell() };
+  const updateDwell = () => {
+    const trains = K.ctx.sim.trains;
+    const now = K.ctx.sim.time;
+    for (const id of ['A', 'B']) {
+      const d = dwell[id];
+      let standing = null;
+      for (let i = 0; i < trains.length; i++) if (trains[i].track === id && trains[i].state === 'standing') standing = trains[i];
+      if (!standing) {
+        // any other state (arriving / departing / hidden) arms the next dwell as observed from its start
+        d.active = false; d.fromStart = trains.length > 0; d.opened = false; d.shutAt = -1; d.hold = false;
+        continue;
+      }
+      if (!d.active) { d.active = true; if (!d.fromStart) d.shutAt = now - CLEAR_AFTER; }
+      if (standing.doorsOpen > 0) { d.opened = true; d.shutAt = -1; } else if (d.opened && d.shutAt < 0) d.shutAt = now;
+      d.hold = standing.doorsOpen > 0 || d.shutAt < 0 || now - d.shutAt < CLEAR_AFTER;
+    }
+  };
   const evaluate = () => {
     let changed = false;
+    updateDwell();
     for (const id of ['A', 'B']) {
       const list = byTrack[id];
       for (let i = list.length - 1; i >= 0; i--) {
         const s = list[i];
         let st = occupied(id, s.block[0], s.block[1]) ? 'R' : s.next && s.next.state === 'R' ? 'Y' : 'G';
+        if (s.kind === 'start' && dwell[id].hold) st = 'R';
         if (!s.aspects.includes(st)) st = st === 'Y' ? 'R' : st; // 2-aspect start signals: no yellow
         if (st !== s.state) { s.state = st; changed = true; }
       }

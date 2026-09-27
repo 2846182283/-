@@ -10,7 +10,9 @@
  *   signs.js      the painted sign atlas;  textures.js  ballast / mesh / weed textures
  *
  * Static parts are painted with vertex colours and merged per material
- * ("buckets"), so the whole railway is ~16 draw calls.  The level-crossing
+ * ("buckets"); every bucket, the sleepers, stones and fastenings are then
+ * split into x chunks (common.js CHUNK_EDGES) so frustum culling keeps each
+ * pass to the part of the 880 m line in view (~15-60 calls).  The level-crossing
  * deck/barriers (crossing.js), platforms (station.js), petals (sakura.js) and
  * trains (train.js) are other modules' work; this module keeps their space clear.
  */
@@ -85,6 +87,31 @@ function triangleReport(root) {
   return out;
 }
 
+/** Debug (?railStats=1): once, after the first frames, log the railway meshes inside the camera frustum. */
+function logVisible(ctx, root) {
+  let frames = 0;
+  const frustum = new THREE.Frustum();
+  const m = new THREE.Matrix4();
+  ctx.onUpdate(() => {
+    if (++frames !== 3) return;
+    const cam = ctx.camera;
+    cam.updateMatrixWorld();
+    m.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    frustum.setFromProjectionMatrix(m);
+    let n = 0, tris = 0, outl = 0;
+    root.updateMatrixWorld(true);
+    for (const o of root.children) {
+      if (!o.geometry) continue;
+      if (o.frustumCulled !== false && !frustum.intersectsObject(o)) continue;
+      n++;
+      if (!o.userData.noOutline) outl++;
+      const g = o.geometry;
+      if (!o.isLineSegments) tris += ((g.index ? g.index.count : g.attributes.position.count) / 3) * (o.isInstancedMesh ? o.count : 1);
+    }
+    console.warn(`[railway] in view: ${n} draw calls (${outl} outlined), ${Math.round(tris)} main-pass triangles of ${root.children.length} objects`);
+  });
+}
+
 function devGround(ctx) {
   const m = new THREE.Mesh(new THREE.PlaneGeometry(1000, 400), ctx.toon.mat('#b3c796'));
   m.rotation.x = -Math.PI / 2;
@@ -112,23 +139,29 @@ export default async function build(ctx) {
 
   // --- the kit shared by every sub-builder ------------------------------------
   const B = new Buckets(ctx.geom);
+  // Every bucket is split into x chunks at the end (common.js CHUNK_EDGES), so
+  // keep the bucket list short: each one costs a draw call per visible chunk.
   B.define('bed', M.bed, { cast: false });
   B.define('rail', M.rail, { cast: true });
-  B.define('railSmall', M.rail, { cast: false, noOutline: true });
   B.define('steel', M.steel, { cast: true });
-  B.define('steelSmall', M.steel, { cast: false, noOutline: true });
-  B.define('vc', M.vc, { cast: true });
+  B.define('vcLow', M.vc, { cast: false }); // outlined, but too low to cast a useful shadow
+  B.define('vc', M.vc, { cast: true, low: 'vcLow' }); // pieces < 0.3 m tall are routed to vcLow
   B.define('vcSmall', M.vc, { cast: false, noOutline: true });
-  B.define('atlas', M.atlas, { cast: false, noOutline: true });
+  B.alias('railSmall', 'vcSmall'); // bolts, bond wires, rods: tiny, matte is fine
+  B.alias('steelSmall', 'vcSmall');
+  B.define('atlas', M.atlas, { cast: false, noOutline: true, chunk: false });
   B.define('wire', M.wire, { cast: false, noOutline: true });
   B.define('weed', M.weed, { cast: false, noOutline: true, keep: ['color', 'sway'] });
-  B.define('fenceS', M.fence, { cast: false, noOutline: true });
-  B.define('fenceN', M.fence, { cast: false, noOutline: true });
+  // one chain-link bucket (north runs are added first so they draw behind the south ones)
+  B.define('fence', M.fence, { cast: false, noOutline: true, chunk: false });
+  B.alias('fenceS', 'fence');
+  B.alias('fenceN', 'fence');
 
   const objects = [];
   const linePos = [];
   const K = {
     ctx, THREE, geom: ctx.geom, toon: ctx.toon, B, M,
+    density: ctx.lod?.density ?? 1,
     rng: (seed) => ctx.rng(seed),
     stats: {},
     poleCount,
@@ -186,7 +219,10 @@ export default async function build(ctx) {
   // dev aid while terrain.js is unfinished: ?railDevGround=1 adds a flat ground plane
   if (ctx.params.get('railDevGround') === '1') root.add(devGround(ctx));
   root.userData.railTopY = 0.45;
-  if (ctx.params.get('railStats') === '1') console.warn('[railway] triangles', JSON.stringify(triangleReport(root)));
+  if (ctx.params.get('railStats') === '1') {
+    console.warn('[railway] triangles', JSON.stringify(triangleReport(root)));
+    logVisible(ctx, root);
+  }
   root.userData.buildMs = Math.round(performance.now() - t0);
   root.userData.stats = K.stats;
   return root;

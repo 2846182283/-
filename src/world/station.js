@@ -40,6 +40,11 @@ export default async function build(ctx) {
   buildFurniture(kit, S, statics, clocks);
   const crossing = buildInStationCrossing(kit, S, statics);
 
+  // sign atlas pages after packing (trimmed to their content): debug / budget info
+  root.userData.atlasStats = [...new Set([kit.atlas, kit.atlas2, kit.atlas3])].map((a) => ({
+    size: `${a.w}x${a.h}`, used: +a.used.toFixed(2), fill: +a.fill.toFixed(2),
+  }));
+
   const baked = ctx.geom.bakeStatic(statics, { name: 'station' });
   root.add(baked);
   clocks.finish(root);

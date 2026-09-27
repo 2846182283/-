@@ -44,7 +44,7 @@ export function makeSigns(kit) {
   });
 
   /** 駅名標: classic board.  leftSt / rightSt = stations shown with arrows. */
-  const ekimeihyo = (leftSt, rightSt) => P.add(860, 400, (g, w, h) => {
+  const ekimeihyo = (leftSt, rightSt) => A.add(860, 400, (g, w, h) => {
     g.fillStyle = '#ffffff';
     g.fillRect(0, 0, w, h);
     const band = 108;
@@ -81,7 +81,7 @@ export function makeSigns(kit) {
   S.ekiP1 = ekimeihyo(WST, EST); // on P1 facing north: west is on the left
   S.ekiP2 = ekimeihyo(EST, WST); // on P2 facing south: east is on the left
 
-  S.hangName = Q.add(900, 150, (g, w, h) => {
+  S.hangName = A.add(900, 150, (g, w, h) => {
     g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h);
     g.fillStyle = PINK; g.fillRect(0, h - 18, w, 18);
     badge(g, 18, 20, 94, STATION.code);
@@ -165,9 +165,9 @@ export function makeSigns(kit) {
     for (let y = 44; y < h; y += 4) g.fillRect(0, y, w, 1);
     for (let x = 0; x < w; x += 4) g.fillRect(x, 44, 1, h - 44);
   }));
-  S.led1 = led([['普通', '16:08', `${west.name}`, '3両', '1番線'], ['普通', '16:23', `${LINE_STATIONS[0].name}`, '3両', '1番線']], `  1番線  ${west.name}・${LINE_STATIONS[0].name}方面   Track 1`);
-  S.led2 = led([['普通', '16:12', `${east.name}`, '3両', '2番線'], ['快速', '16:27', `${LINE_STATIONS[11].name}`, '3両', '2番線']], `  2番線  ${east.name}・${LINE_STATIONS[11].name}方面   Track 2`);
-  S.ledBoth = led([['普通', '16:08', west.name, '3両', '1番線'], ['普通', '16:12', east.name, '3両', '2番線']], '  発車案内   Departures');
+  S.led1 = led([['各停', '16:08', `${west.name}`, '3両', '1番線'], ['各停', '16:23', `${LINE_STATIONS[0].name}`, '3両', '1番線']], `  1番線  ${west.name}・${LINE_STATIONS[0].name}方面   Track 1`);
+  S.led2 = led([['各停', '16:12', `${east.name}`, '3両', '2番線'], ['快速', '16:27', `${LINE_STATIONS[11].name}`, '3両', '2番線']], `  2番線  ${east.name}・${LINE_STATIONS[11].name}方面   Track 2`);
+  S.ledBoth = led([['各停', '16:08', west.name, '3両', '1番線'], ['各停', '16:12', east.name, '3両', '2番線']], '  発車案内   Departures');
 
   // ======================= clock face =======================
   S.clock = A.add(256, 256, (g, w, h) => {
@@ -297,6 +297,15 @@ export function makeSigns(kit) {
     T(g, 'きっぷうりば・精算・お問い合わせ', 20, 72, 400, 36, { color: '#fff', align: 'left' });
     T(g, 'Ticket Office', w - 200, 30, 180, 50, { color: '#c8d0e4', font: FONTS.latin });
   });
+  // vertical wooden name plate beside the staff door on the east wall
+  S.ekimuPlate = A.add(96, 320, (g, w, h) => {
+    g.fillStyle = '#efe2c8'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = 'rgba(150,110,70,0.25)'; g.lineWidth = 2;
+    for (let y = 12; y < h; y += 17) { g.beginPath(); g.moveTo(4, y); g.bezierCurveTo(30, y + 4, 60, y - 4, w - 4, y + 2); g.stroke(); }
+    verticalText(g, '駅務室', w / 2, 18, h - 52, { font: FONTS.mincho, color: '#2b2a2e', maxSize: 74 });
+    T(g, STATION.name, 6, h - 44, w - 12, 30, { color: '#6a4e3a' });
+    g.strokeStyle = '#6a4e3a'; g.lineWidth = 6; g.strokeRect(3, 3, w - 6, h - 6);
+  });
   S.officeDoor = A.add(300, 90, (g, w, h) => {
     g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h);
     T(g, '駅事務室', 10, 6, w - 20, 50, { color: NAVY });
@@ -419,6 +428,40 @@ export function makeSigns(kit) {
     T(g, STATION.company, w * 0.52, 400, w * 0.44, 30, { color: '#888' });
     g.strokeStyle = '#d8342c'; g.lineWidth = 6; g.strokeRect(3, 3, w - 6, h - 6);
   });
+  // small enamel plate on the platform retaining walls
+  S.underPlat = A.add(360, 150, (g, w, h) => {
+    g.fillStyle = '#fbfaf5'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#d8342c'; g.fillRect(0, 0, 70, h);
+    T(g, '禁', 6, 20, 58, 110, { color: '#fff' });
+    T(g, 'ホーム下', 82, 10, w - 94, 56, { color: '#d8342c', letterSpacing: 6 });
+    T(g, '立入禁止', 82, 66, w - 94, 56, { color: '#d8342c', letterSpacing: 10 });
+    T(g, STATION.company, 82, 124, w - 94, 20, { color: '#8a8a8a' });
+    g.strokeStyle = 'rgba(90,90,90,0.4)'; g.lineWidth = 4; g.strokeRect(2, 2, w - 4, h - 4);
+    agePaper(g, w, h, seeded(88), 0.05, false);
+  });
+  // back of a sheet-metal sign: matte grey primer, rivets, faint rust run, inventory sticker
+  S.signBack = A.add(180, 230, (g, w, h) => {
+    const rnd = seeded(417);
+    g.fillStyle = '#b9bab6'; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 18; i++) {
+      g.fillStyle = `rgba(${rnd() < 0.5 ? '150,150,148' : '205,205,200'},${0.15 + rnd() * 0.15})`;
+      g.fillRect(rnd() * w, rnd() * h, 20 + rnd() * 50, 3 + rnd() * 6);
+    }
+    // stiffener rail + rivets
+    g.fillStyle = '#a2a39f'; g.fillRect(0, h * 0.44, w, 16);
+    g.fillStyle = 'rgba(80,80,84,0.35)'; g.fillRect(0, h * 0.44 + 14, w, 3);
+    for (const [x, y] of [[14, 14], [w - 14, 14], [14, h - 14], [w - 14, h - 14], [w * 0.3, h * 0.44 + 8], [w * 0.7, h * 0.44 + 8]]) {
+      g.fillStyle = '#7f807d'; g.beginPath(); g.arc(x, y, 5, 0, 7); g.fill();
+      g.fillStyle = '#d5d6d2'; g.beginPath(); g.arc(x - 1.5, y - 1.5, 2, 0, 7); g.fill();
+    }
+    const gr = g.createLinearGradient(0, 18, 0, 90);
+    gr.addColorStop(0, 'rgba(150,110,80,0.35)'); gr.addColorStop(1, 'rgba(150,110,80,0)');
+    g.fillStyle = gr; g.fillRect(w - 20, 18, 4, 72);
+    // inventory sticker
+    rrect(g, 34, h - 74, 112, 44, 4, '#f4f2ea', 'rgba(60,60,60,0.5)', 2);
+    T(g, '春風電鉄 施設', 40, h - 72, 100, 18, { color: '#444' });
+    T(g, 'No. 07-114', 40, h - 52, 100, 18, { color: '#444', font: FONTS.latin });
+  });
   S.crossNotice = P.add(620, 380, (g, w, h) => {
     g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h);
     // yellow-black hazard stripe header
@@ -465,7 +508,7 @@ export function makeSigns(kit) {
   S.doorMark = [];
   for (let c = 1; c <= 3; c++) {
     for (let d = 1; d <= 3; d++) {
-      S.doorMark.push(A.add(288, 150, (g, w, h) => {
+      S.doorMark.push(P.add(288, 150, (g, w, h) => {
         g.clearRect(0, 0, w, h);
         g.fillStyle = 'rgba(250,250,246,0.95)';
         // two chevron lanes pointing to the track (top of the texture = track side)

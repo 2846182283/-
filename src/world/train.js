@@ -164,6 +164,23 @@ function cabDecals(P, set, leading, r, i) {
 }
 
 // ---------------------------------------------------------------------------
+/**
+ * The cream body faces the 4 pm sun broadside; at full direct light it sits on
+ * the tone-mapping shoulder and flattens into peach-white (door seams and car
+ * numbers vanish).  Scale only the direct (sun) term of the body material so the
+ * lit side stays below the shoulder while the soft blue-violet shadow side keeps
+ * its value.
+ */
+const SUNLIT_DAMP = {
+  onShaderKey: 'trainSunDamp',
+  onShader(shader) {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      'vec3 outgoingLight = reflectedLight.directDiffuse +',
+      'vec3 outgoingLight = reflectedLight.directDiffuse * 0.8 +'
+    );
+  },
+};
+
 export default async function build(ctx) {
   const { toon, geom, sim } = ctx;
   const root = new THREE.Group();
@@ -173,7 +190,7 @@ export default async function build(ctx) {
   const atlas = buildAtlas(SETS);
   const noise = ctx.tex.noiseTexture({ size: 256, scale: 6, octaves: 3, base: '#ffffff', variation: 0.07, seed: 71, repeat: [1, 1] });
   const M = {
-    body: toon.mat('#ffffff', { vertexColors: true, map: noise, rim: 0.18, name: 'train_body' }),
+    body: toon.mat('#ffffff', { vertexColors: true, map: noise, rim: 0.08, name: 'train_body', ...SUNLIT_DAMP }),
     metal: toon.metal('#ffffff', { vertexColors: true, name: 'train_metal' }),
     glass: toon.glass({ tint: '#98b0c4', opacity: 0.34, sheen: 0.3 }),
     glassF: toon.glass({ tint: '#7690a8', opacity: 0.48, sheen: 0.4 }),
@@ -184,7 +201,7 @@ export default async function build(ctx) {
   const BUCKET_MESH = {
     body: { mat: M.body, cast: true }, bodyNO: { mat: M.body, noOutline: true }, metal: { mat: M.metal, cast: true },
     metalNO: { mat: M.metal, noOutline: true },
-    inner: { mat: M.body, cast: true, inner: true }, innerNO: { mat: M.body, noOutline: true, inner: true },
+    inner: { mat: M.body, inner: true } /* enclosed: its shadow would land inside the body */, innerNO: { mat: M.body, noOutline: true, inner: true },
     innerMetal: { mat: M.metal, noOutline: true, inner: true }, innerDecal: { mat: M.decal, noOutline: true, inner: true },
     glass: { mat: M.glass, noOutline: true }, glassF: { mat: M.glassF, noOutline: true },
     decal: { mat: M.decal, noOutline: true }, led: { mat: M.led, noOutline: true }, glow: { mat: M.glow, noOutline: true, order: 5 },
@@ -224,7 +241,7 @@ export default async function build(ctx) {
       const cm = carMatrix(i);
       for (const bx of [-D.bogieX, D.bogieX]) for (const a of [-1, 1]) axles.push(new THREE.Vector3(bx + a * D.axleHalf, D.wheelY, 0).applyMatrix4(cm));
     });
-    const wheels = geom.instanced(wheelGeo, M.metal, axles.map((p) => new THREE.Matrix4().makeTranslation(p.x, p.y, p.z)), { castShadow: true });
+    const wheels = geom.instanced(wheelGeo, M.metal, axles.map((p) => new THREE.Matrix4().makeTranslation(p.x, p.y, p.z)), { castShadow: false }); // hidden under the body shadow anyway
     wheels.name = `${g.name}:wheels`;
     g.add(wheels);
     // door leaves (instanced), platform side slides open

@@ -177,15 +177,19 @@ export function makeTextures(ctx) {
     g.beginPath(); g.moveTo(w / 2, 0); g.lineTo(w / 2, h); g.stroke();
     g.fillStyle = 'rgba(120,118,120,0.5)';
     for (let x = w / 8; x < w; x += w / 4) for (let y = h / 8; y < h; y += h / 4) { g.beginPath(); g.arc(x, y, 3, 0, 7); g.fill(); }
-    // streaks from the top
-    for (let i = 0; i < 14; i++) {
-      const x = rnd() * w, len = 30 + rnd() * 120;
+    // rain streaks from the top (clustered, a few long runs with thin tails)
+    for (let i = 0; i < 24; i++) {
+      const x = rnd() * w, len = 30 + rnd() * 150, sw = 3 + rnd() * 8;
       const gr = g.createLinearGradient(0, 0, 0, len);
-      gr.addColorStop(0, 'rgba(110,108,112,0.3)');
+      gr.addColorStop(0, `rgba(104,104,112,${0.26 + rnd() * 0.16})`);
       gr.addColorStop(1, 'rgba(110,108,112,0)');
       g.fillStyle = gr;
-      g.fillRect(x, 0, 3 + rnd() * 6, len);
+      g.fillRect(x, 0, sw, len);
+      g.fillRect(x + sw * 0.4, 0, Math.max(1.5, sw * 0.25), len * 1.3);
     }
+    // soft stains (simplified, hand-painted feel) + a pale efflorescence patch
+    blotches(g, rnd, w, h, 7, ['150,148,150'], 14, 34, 0.14, 0.24);
+    blotches(g, rnd, w, h, 3, ['238,236,228'], 20, 40, 0.35, 0.5);
     // moss / damp at the foot
     const gr = g.createLinearGradient(0, h, 0, h - 50);
     gr.addColorStop(0, 'rgba(120,140,100,0.35)');

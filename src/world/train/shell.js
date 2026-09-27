@@ -15,7 +15,10 @@ import { D, DOORS, CREW_DOOR, CAB, Y_ROWS, BROW_F, Z_COLS, roofY, roofNormal, xF
 import { roundRectPath, extrude } from './parts.js';
 
 export const COL = {
-  cream: PALETTE.trainCream,
+  // PALETTE.trainCream (#f5f1e6) clips to flat peach-white in the warm 4 pm sun;
+  // the body uses a ~6% darker, more neutral cream (the warm sun + grade add the
+  // yellow back) so panel shading survives.
+  cream: '#e9e5dc',
   pink: STATION.lineColor,
   pinkBand: PALETTE.trainPink,
   roof: '#c3c7cc',

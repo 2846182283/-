@@ -276,9 +276,86 @@ function gateCabinet(kit, S, parent, x, z0, z1, o = {}) {
   // end displays
   kit.decal(parent, o.inOk === false ? S.gateNo : S.gateIn, 0.16, 0.08, x, FY + 0.85, z0 + 0.003, 0, { mat: kit.matFor(S.gateIn, 'unlit') });
   kit.decal(parent, o.outOk === false ? S.gateNo : S.gateIn, 0.16, 0.08, x, FY + 0.85, z1 - 0.003, Math.PI, { mat: kit.matFor(S.gateIn, 'unlit') });
-  // retracted flaps (slivers of orange at mid length on both sides)
-  for (const s of [-1, 1]) kit.bx(parent, M.vc, '#e8744a', x + s * (w / 2) - 0.008, x + s * (w / 2) + 0.008, FY + 0.55, FY + 0.85, (z0 + z1) / 2 - 0.15, (z0 + z1) / 2 + 0.15, { noOutline: true });
+  // retracted flaps: short thick orange paddles standing ~3 cm proud of each
+  // side at mid length, framed by a dark slot in the cabinet skin
+  const zm = (z0 + z1) / 2;
+  for (const s of [-1, 1]) {
+    const xs = x + s * (w / 2);
+    kit.bx(parent, M.vc, '#4a4f57', Math.min(xs, xs + s * 0.004), Math.max(xs, xs + s * 0.004), FY + 0.53, FY + 0.87, zm - 0.17, zm + 0.17, { noOutline: true, cast: false });
+    const fg = new THREE.BoxGeometry(0.03, 0.3, 0.3);
+    // rounded leading edge look: bevel the top-front corner by squashing the upper verts
+    const pa = fg.attributes.position;
+    for (let i = 0; i < pa.count; i++) if (pa.getY(i) > 0 && pa.getZ(i) > 0) pa.setZ(i, pa.getZ(i) - 0.06);
+    fg.computeVertexNormals();
+    fg.translate(xs + s * 0.015, FY + 0.7, zm);
+    kit.add(parent, fg, M.vc, '#ee7a4c', { cast: false });
+    kit.bx(parent, M.vc, '#c85a36', Math.min(xs, xs + s * 0.031), Math.max(xs, xs + s * 0.031), FY + 0.545, FY + 0.56, zm - 0.14, zm + 0.14, { noOutline: true, cast: false });
+  }
   kit.colliders.push([x - 0.12, x + 0.12, z1, z0]);
+}
+
+/**
+ * Inside the staffed booth: desk along the north wall with a small monitor,
+ * papers, a pen cup and a desk lamp (warm unlit shade face), a swivel chair.
+ */
+function boothInterior(kit, S, parent, bx0, bx1, bz0, bz1) {
+  const { M } = kit;
+  const dy = FY + 0.76; // desk top
+  const dz0 = bz0 + 0.08, dz1 = bz0 + 0.58;
+  kit.bx(parent, M.wood, '#c49a6c', bx0 + 0.1, bx1 - 0.1, dy - 0.04, dy, dz0, dz1, { uv: [1, 1] });
+  kit.bx(parent, M.vcIn, '#d9d3c6', bx0 + 0.12, bx0 + 0.55, FY, dy - 0.04, dz0 + 0.02, dz1 - 0.04); // drawer pedestal
+  for (const y of [0.22, 0.44]) kit.bx(parent, M.vc, '#8b847a', bx0 + 0.15, bx0 + 0.52, FY + y, FY + y + 0.012, dz1 - 0.035, dz1 - 0.03, { noOutline: true });
+  // monitor (dark bezel, screen facing the seat / the hall)
+  const mx = (bx0 + bx1) / 2 - 0.15;
+  kit.bx(parent, M.metal, '#3a3d44', mx - 0.05, mx + 0.05, dy, dy + 0.012, dz0 + 0.12, dz0 + 0.22);
+  kit.bx(parent, M.metal, '#3a3d44', mx - 0.02, mx + 0.02, dy, dy + 0.14, dz0 + 0.15, dz0 + 0.18);
+  kit.bx(parent, M.metal, '#2c2f35', mx - 0.21, mx + 0.21, dy + 0.1, dy + 0.38, dz0 + 0.17, dz0 + 0.21);
+  kit.bx(parent, M.lamp, '#a9c9e8', mx - 0.19, mx + 0.19, dy + 0.12, dy + 0.36, dz0 + 0.21, dz0 + 0.212, { noOutline: true, cast: false });
+  kit.bx(parent, M.lamp, '#f5f7fa', mx - 0.17, mx + 0.02, dy + 0.3, dy + 0.34, dz0 + 0.213, dz0 + 0.214, { noOutline: true, cast: false });
+  kit.bx(parent, M.vc, '#e9e9e4', mx - 0.18, mx + 0.18, dy, dy + 0.018, dz0 + 0.3, dz0 + 0.42); // keyboard
+  // papers (a few loose sheets + a clipboard) and a pen cup
+  const rng = kit.ctx.rng(515);
+  for (let i = 0; i < 3; i++) {
+    const sh = new THREE.PlaneGeometry(0.21, 0.297);
+    sh.rotateX(-Math.PI / 2);
+    sh.rotateY(rng.range(-0.4, 0.4));
+    sh.translate(mx + 0.4 + i * 0.05, dy + 0.002 + i * 0.001, dz0 + 0.3 + rng.range(-0.03, 0.03));
+    kit.add(parent, sh, M.vcIn, i === 1 ? '#f6efd8' : '#fbfaf6', { noOutline: true, cast: false });
+  }
+  kit.bx(parent, M.vc, '#8a6a4a', mx + 0.63, mx + 0.83, dy, dy + 0.01, dz0 + 0.1, dz0 + 0.42);
+  kit.bx(parent, M.vcIn, '#fbfaf6', mx + 0.645, mx + 0.815, dy + 0.01, dy + 0.012, dz0 + 0.12, dz0 + 0.38, { noOutline: true });
+  kit.cyl(parent, M.vc, '#3d6fb0', 0.035, 0.03, 0.1, mx + 0.4, dy, dz0 + 0.08, 10);
+  for (const [dx, c] of [[-0.01, '#d8484a'], [0.012, '#222'], [0, '#3b7fd1']]) {
+    kit.cyl(parent, M.vc, c, 0.004, 0.004, 0.16, mx + 0.4 + dx, dy + 0.02, dz0 + 0.08 + dx, 4, { rz: dx * 12, noOutline: true, cast: false });
+  }
+  // desk lamp: base, arm, shade with a warm glowing face underneath
+  const lx = bx1 - 0.3, lz = dz0 + 0.1;
+  kit.cyl(parent, M.metal, '#46604e', 0.06, 0.07, 0.02, lx, dy, lz, 12);
+  kit.beam(parent, M.metal, '#46604e', V(lx, dy + 0.02, lz), V(lx - 0.04, dy + 0.3, lz + 0.05), 0.018, 0.018);
+  kit.beam(parent, M.metal, '#46604e', V(lx - 0.04, dy + 0.3, lz + 0.05), V(lx - 0.2, dy + 0.34, lz + 0.14), 0.018, 0.018);
+  kit.cyl(parent, M.metal, '#46604e', 0.035, 0.08, 0.09, lx - 0.22, dy + 0.26, lz + 0.15, 12, { open: true });
+  const face = new THREE.CircleGeometry(0.075, 12);
+  face.rotateX(Math.PI / 2);
+  face.translate(lx - 0.22, dy + 0.262, lz + 0.15);
+  kit.add(parent, face, M.lamp, '#ffe0a0', { noOutline: true, cast: false });
+  // warm pool of light on the desk
+  const pool = new THREE.CircleGeometry(0.2, 16);
+  pool.rotateX(-Math.PI / 2);
+  pool.translate(lx - 0.24, dy + 0.003, lz + 0.2);
+  kit.add(parent, pool, M.lamp, '#f3e2bf', { noOutline: true, cast: false });
+  // swivel chair: seat, back, gas column, star base
+  const cx = (bx0 + bx1) / 2 - 0.1, cz = INT.gateZ + 0.12;
+  kit.cyl(parent, M.vc, '#3d6fb0', 0.2, 0.2, 0.06, cx, FY + 0.45, cz, 12);
+  kit.cyl(parent, M.metal, '#8f969d', 0.025, 0.025, 0.4, cx, FY + 0.05, cz, 6);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    kit.beam(parent, M.metal, '#4a4d52', V(cx, FY + 0.06, cz), V(cx + Math.cos(a) * 0.26, FY + 0.03, cz + Math.sin(a) * 0.26), 0.03, 0.03);
+  }
+  kit.bx(parent, M.metal, '#4a4d52', cx - 0.02, cx + 0.02, FY + 0.48, FY + 0.72, cz + 0.2, cz + 0.23);
+  kit.box(parent, M.vc, '#3d6fb0', 0.38, 0.34, 0.06, cx, FY + 0.88, cz + 0.22, { rx: -0.12 });
+  // a jacket on a hook + a safety poster on the office wall side of the booth
+  kit.decal(parent, S.posterSafety, 0.3, 0.42, bx1 - 0.006, FY + 1.5, (bz0 + bz1) / 2 + 0.2, -Math.PI / 2, { mat: kit.matFor(S.posterSafety, 'in') });
+  kit.box(parent, M.vc, '#2d3a55', 0.1, 0.55, 0.3, bx1 - 0.08, FY + 1.35, (bz0 + bz1) / 2 - 0.25, { rz: 0.04 });
 }
 
 function buildGates(kit, S, parent) {
@@ -304,10 +381,7 @@ function buildGates(kit, S, parent) {
   gl(bx1 - bx0, 1.15, (bx0 + bx1) / 2, FY + 1.62, bz1, 0);
   kit.bx(parent, M.vc, '#f4f1ea', bx0 - 0.08, bx1, FY + 2.2, FY + 2.32, bz0 - 0.08, bz1 + 0.08);
   kit.decal(parent, S.boothSign, 0.9, 0.225, (bx0 + bx1) / 2, FY + 2.26, bz1 + 0.081, 0, { mat: kit.matFor(S.boothSign, 'in') });
-  // stool + desk inside
-  kit.bx(parent, M.wood, '#c49a6c', bx0 + 0.1, bx1 - 0.1, FY + 0.72, FY + 0.76, bz0 + 0.1, bz0 + 0.55, { uv: [1, 1] });
-  kit.cyl(parent, M.vc, '#3d6fb0', 0.18, 0.18, 0.06, (bx0 + bx1) / 2, FY + 0.45, INT.gateZ + 0.1, 12);
-  kit.cyl(parent, M.metal, '#8f969d', 0.03, 0.03, 0.45, (bx0 + bx1) / 2, FY, INT.gateZ + 0.1, 6);
+  boothInterior(kit, S, parent, bx0, bx1, bz0, bz1);
   kit.colliders.push([bx0, bx1, bz0, bz1]);
   // low swing gate in the staffed passage (open)
   const gx = bx0 - 0.02;

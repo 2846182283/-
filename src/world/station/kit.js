@@ -70,12 +70,15 @@ const WARM_IN = {
 export function createKit(ctx) {
   const { toon } = ctx;
   const T = makeTextures(ctx);
-  // three sign atlases: A = railway signage, P = maps / posters, Q = ads, drawings, timetables
+  // two sign atlas pages: A = railway signage + name boards at full resolution;
+  // the second page holds maps / posters (P) and ads, drawings, timetables (Q),
+  // stored at 72 % of their design resolution (they are read from a few metres,
+  // text there stays legible and the page saves ~22 MB of GPU memory).
   const atlas = new Atlas(2048, 2048);
-  const atlas2 = new Atlas(2048, 2048);
-  const atlas3 = new Atlas(2048, 2048);
+  const atlas2 = new Atlas(2048, 2048, { scale: 0.72 });
+  const atlas3 = atlas2;
   const warm = { emissive: '#ffeede', emissiveIntensity: 0.12, ...WARM_IN };
-  for (const [i, a] of [atlas, atlas2, atlas3].entries()) {
+  for (const [i, a] of [atlas, atlas2].entries()) {
     a.mats = {
       lit: toon.mat('#ffffff', { map: a.texture, alphaTest: 0.5, name: `st_sign${i}` }),
       in: toon.mat('#ffffff', { map: a.texture, alphaTest: 0.5, emissiveMap: a.texture, ...warm, name: `st_signIn${i}` }),
@@ -269,7 +272,11 @@ export function createKit(ctx) {
     kit.box(g, o.frameMat || M.metal, o.frameColor || '#e8e8e6', w + frame * 2, h + frame * 2, t, 0, 0, 0);
     const mat = o.mat || kit.matFor(region, o.kind);
     kit.decal(g, region, w, h, 0, 0, t / 2 + 0.003, 0, { mat });
-    if (o.back) kit.decal(g, o.back === true ? region : o.back, w, h, 0, 0, -t / 2 - 0.003, Math.PI, { mat });
+    if (o.back) {
+      const br = o.back === true ? region : o.back;
+      const bmat = br.atlas === region.atlas ? mat : kit.matFor(br, o.kind);
+      kit.decal(g, br, w, h, 0, 0, -t / 2 - 0.003, Math.PI, { mat: bmat });
+    }
     parent.add(g);
     return g;
   };

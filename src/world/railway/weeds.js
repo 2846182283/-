@@ -11,7 +11,7 @@
  * like the ground (no dark back sides).
  */
 import * as THREE from 'three';
-import { TRK, inPlatformX, inCrossing, inInternalCrossing, isNear, wobble } from './common.js';
+import { TRK, inPlatformX, inCrossing, inInternalCrossing, isNear, wobble, thinner } from './common.js';
 import { bedHeight } from './track.js';
 import { EDGE_Z } from './trackside.js';
 
@@ -43,7 +43,9 @@ export function buildWeeds(K) {
   const pos = [], nor = [], uv = [], col = [], sway = [], idx = [];
   const c = new THREE.Color();
 
+  const keep = thinner(K.rng(602), K.density); // fewer plants on the low quality tier
   const plant = (type, x, z, y, scale = 1) => {
+    if (!keep()) return;
     const T = TYPES[type];
     const w = (T.w[0] + rng() * (T.w[1] - T.w[0])) * scale;
     const h = (T.h[0] + rng() * (T.h[1] - T.h[0])) * scale;

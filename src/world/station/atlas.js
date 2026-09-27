@@ -1,7 +1,8 @@
 /**
  * Tiny shelf-packing canvas atlas.  Every sign / poster of the station is
  * drawn into one of two big canvases so they all share a single material
- * (one draw call after baking).
+ * (one draw call after baking).  A page can store its regions at reduced
+ * resolution (o.scale) while callers keep drawing at their design size.
  *
  *   const r = atlas.add(512, 256, (g, w, h) => { ...draw... });   // queued
  *   atlas.pack();                                                 // packs (tallest first) + draws
@@ -15,9 +16,12 @@ import { makeCanvas, toTexture } from '../../core/canvasTex.js';
 const PAD = 5;
 
 export class Atlas {
-  constructor(w = 2048, h = 2048) {
+  /** o.scale: default resolution factor for regions queued on this page (see add). */
+  constructor(w = 2048, h = 2048, o = {}) {
     this.w = w;
     this.h = h;
+    this.scale = o.scale ?? 1;
+    this.packed = false;
     this.canvas = makeCanvas(w, h);
     this.g = this.canvas.getContext('2d');
     this.g.fillStyle = '#808080';
@@ -29,17 +33,27 @@ export class Atlas {
     this.used = 0;
   }
 
-  /** Queue a region; draw(ctx2d, w, h) paints it in local pixel coordinates. */
-  add(w, h, draw) {
-    const region = { atlas: this, aspect: w / h };
-    this.queue.push({ w: Math.round(w), h: Math.round(h), draw, region });
+  /**
+   * Queue a region; draw(ctx2d, w, h) paints it in local pixel coordinates of
+   * the design size w x h.  The region is stored at w*scale x h*scale pixels
+   * (scale defaults to the page's), the drawing is scaled down to fit.
+   */
+  add(w, h, draw, scale = this.scale) {
+    const region = { atlas: this, aspect: w / h, scale };
+    let fn = draw;
+    if (scale !== 1) {
+      const W = w, H = h;
+      fn = (g, rw, rh) => { g.scale(rw / W, rh / H); draw(g, W, H); };
+    }
+    this.queue.push({ w: Math.max(1, Math.round(w * scale)), h: Math.max(1, Math.round(h * scale)), draw: fn, region });
     return region;
   }
 
-  /** Sub-rectangle (pixels, relative to region r); resolved in pack(). */
+  /** Sub-rectangle (design pixels, relative to region r); resolved in pack(). */
   sub(r, sx, sy, sw, sh) {
     const region = { atlas: this, aspect: sw / sh };
-    this.subs.push({ r, sx, sy, sw, sh, region });
+    const k = r.scale ?? 1;
+    this.subs.push({ r, sx: sx * k, sy: sy * k, sw: sw * k, sh: sh * k, region });
     return region;
   }
 
@@ -52,8 +66,15 @@ export class Atlas {
     });
   }
 
-  /** Shelf-pack every queued region (tallest first) and draw them. */
+  /**
+   * Shelf-pack every queued region (tallest first) and draw them.  The page is
+   * then trimmed to the smallest power-of-two height that holds every shelf
+   * (a half-filled 2048 page becomes 2048 x 1024), so GPU memory follows the
+   * actual content.  Afterwards `fill` = packed area / page area.
+   */
   pack() {
+    if (this.packed) return; // several region groups may share one page
+    this.packed = true;
     const items = [...this.queue].sort((a, b) => b.h - a.h || b.w - a.w);
     const shelves = [];
     let nextY = 0;
@@ -70,7 +91,18 @@ export class Atlas {
       it.y = s.y + PAD;
       s.x += W;
     }
+    // trim the page (the texture has not been uploaded yet, so resizing is free)
+    let h = 256;
+    while (h < nextY) h *= 2;
+    if (h < this.h) {
+      this.h = h;
+      this.canvas.height = h;
+      this.g.fillStyle = '#808080';
+      this.g.fillRect(0, 0, this.w, h);
+    }
+    const area = items.reduce((a, it) => a + (it.w + PAD * 2) * (it.h + PAD * 2), 0);
     this.used = nextY / this.h;
+    this.fill = area / (this.w * this.h);
     const sc = makeCanvas(8, 8);
     const g = this.g;
     for (const it of items) {

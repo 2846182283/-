@@ -10,8 +10,8 @@
  *   sleepers for storytelling.
  */
 import * as THREE from 'three';
-import { RAIL, CROSSING, TRAIN } from '../../core/layout.js';
-import { TRK, ZONE, inPlatformX, isNear, inRange, jitter, mtx, openBox } from './common.js';
+import { RAIL, CROSSING, TRAIN, WALK_BOUNDS } from '../../core/layout.js';
+import { TRK, ZONE, inPlatformX, isNear, inRange, jitter, mtx, openBox, chunkSpans } from './common.js';
 import { addRail } from './track.js';
 import { relayBox, atsBeacon } from './signals.js';
 
@@ -57,11 +57,10 @@ function troughs(K) {
   for (const z of [Z.troughS, Z.troughN]) {
     const blocked = (x) => nearCrossing(x) || inPlatformX(x, 1);
     for (const [x0, x1] of runs(TRK.xMin, TRK.xMax, blocked)) {
-      const L = x1 - x0;
-      // body as one long piece, lids individually near the walkable area
-      B.add('vc', openBox(L, 0.17, 0.34), '#b3b0a8', mtx((x0 + x1) / 2, 0.085, z));
+      // body as long pieces (one per chunk), lids individually near the walkable area
+      for (const [a, b] of chunkSpans(x0, x1)) B.add('vc', openBox(b - a, 0.17, 0.34), '#b3b0a8', mtx((a + b) / 2, 0.085, z));
       if (!isNear(x0) && !isNear(x1) && !isNear((x0 + x1) / 2)) {
-        B.box('vc', L, 0.035, 0.37, '#c3c0b8', (x0 + x1) / 2, 0.185, z);
+        for (const [a, b] of chunkSpans(x0, x1)) B.box('vc', b - a, 0.035, 0.37, '#c3c0b8', (a + b) / 2, 0.185, z);
         continue;
       }
       for (let x = x0; x < x1 - 0.2; x += 1.0) {
@@ -115,9 +114,11 @@ function fences(K) {
   const ranges = [[TRK.xMin, ZONE.fenceSkip[0]], [ZONE.fenceSkip[1], CROSSING.x - 4.5], [CROSSING.x + 4.5, TRK.xMax]];
   K.fenceRuns = [];
   let plateCount = 0;
-  for (const [side, z] of [[1, Z.fenceS], [-1, Z.fenceN]]) {
+  // north first: the chain-link panels share one blended bucket and draw in insertion order
+  for (const [side, z] of [[-1, Z.fenceN], [1, Z.fenceS]]) {
     for (const [a, b] of ranges) {
       if (b - a < 1) continue;
+      fenceCollider(K, a, b, z);
       // split into style sections
       let x = a;
       while (x < b - 0.5) {
@@ -126,7 +127,8 @@ function fences(K) {
         while (end < b && fenceStyle(end, side) === style) end += 1;
         end = Math.min(end, b);
         K.fenceRuns.push({ side, z, x0: x, x1: end, style });
-        buildFenceRun(K, style, x, end, z, side, rng);
+        // long runs are built per chunk so the merged pieces stay cullable
+        for (const [p, q] of chunkSpans(x, end)) buildFenceRun(K, style, p, q, z, side, rng, p === x, q === end);
         // keep-out boards facing outward on near runs
         for (let px = x + 8; px < end - 3; px += 44) {
           if (!isNear(px) && Math.abs(px - CROSSING.x) > 60) continue;
@@ -142,15 +144,28 @@ function fences(K) {
   }
 }
 
-function buildFenceRun(K, style, x0, x1, z, side, rng) {
+/** Walk collider along a straight fence line (only the part inside the walkable bounds). */
+function fenceCollider(K, x0, x1, z) {
+  const a = Math.max(x0, WALK_BOUNDS.xMin - 2), b = Math.min(x1, WALK_BOUNDS.xMax + 2);
+  if (b - a < 0.2 || !K.ctx.addCollider) return;
+  K.ctx.addCollider(a, b, z - 0.1, z + 0.1);
+  K.stats.fenceColliders = (K.stats.fenceColliders || 0) + 1;
+}
+
+/**
+ * One straight fence piece x0..x1.  head / tail: the piece starts / ends a run
+ * (false where a run was only cut at a chunk edge: no doubled post, no brace).
+ */
+function buildFenceRun(K, style, x0, x1, z, side, rng, head = true, tail = true) {
   const B = K.B;
   const L = x1 - x0;
+  const i0 = head ? 0 : 1; // a continued piece shares its first post with the previous one
   if (style === 'mesh') {
     const H = 1.5;
     const n = Math.max(1, Math.round(L / 2.4));
-    for (let i = 0; i <= n; i++) {
+    for (let i = i0; i <= n; i++) {
       const x = x0 + (L * i) / n;
-      const end = i === 0 || i === n;
+      const end = (i === 0 && head) || (i === n && tail);
       const seg = isNear(x) ? 6 : 4;
       B.cyl('steel', end ? 0.04 : 0.03, end ? 0.04 : 0.03, H + 0.08, '#8e949b', x, 0, z, seg);
       if (isNear(x)) B.cyl('steel', 0.012, end ? 0.045 : 0.036, 0.04, '#7c828a', x, H + 0.08, z, seg);
@@ -172,7 +187,7 @@ function buildFenceRun(K, style, x0, x1, z, side, rng) {
   } else if (style === 'white') {
     const H = 1.1;
     const n = Math.max(1, Math.round(L / 2.0));
-    for (let i = 0; i <= n; i++) {
+    for (let i = i0; i <= n; i++) {
       const x = x0 + (L * i) / n;
       B.block('vc', 0.08, H, 0.08, jitter('#eeece5', rng, 0.02), x, 0, z);
       B.box('vc', 0.1, 0.03, 0.1, '#e2e0d8', x, H + 0.015, z);
@@ -183,7 +198,7 @@ function buildFenceRun(K, style, x0, x1, z, side, rng) {
   } else {
     const H = 1.25;
     const n = Math.max(1, Math.round(L / 2.5));
-    for (let i = 0; i <= n; i++) {
+    for (let i = i0; i <= n; i++) {
       const x = x0 + (L * i) / n;
       B.block('vc', 0.12, H, 0.12, jitter('#bdbab2', rng, 0.03), x, 0, z);
       B.add('vc', new THREE.ConeGeometry(0.09, 0.08, 4, 1), '#b3b0a8', mtx(x, H + 0.04, z, 0, Math.PI / 4));

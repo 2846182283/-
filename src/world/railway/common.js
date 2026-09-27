@@ -40,6 +40,102 @@ export const ZONE = {
   detail: [-105, 75],
 };
 
+/**
+ * Spatial chunks along the line (x edges).  Merged buckets, sleepers, stones
+ * and fastenings are split per chunk so frustum culling (main, outline and
+ * shadow passes) only draws the part of the 880 m railway that is in view.
+ * 80 m chunks around the station / crossing, coarse ones out in the country:
+ * every chunk costs ~10 draw calls, so this is a balance between culling and
+ * call count (a view along the line sees 4-5 chunks).
+ */
+export const CHUNK_EDGES = [-440, -200, -110, -30, 50, 130, 440];
+/** Chunks whose sleepers keep outlines (centre within ~80 m of the platforms). */
+export const OUTLINE_X = [PLATFORM.xMin - 80, PLATFORM.xMax + 80];
+
+/** Index of the chunk containing x (clamped to the ends). */
+export function chunkOf(x) {
+  const E = CHUNK_EDGES;
+  for (let i = 1; i < E.length - 1; i++) if (x < E[i]) return i - 1;
+  return E.length - 2;
+}
+
+/** Split [x0, x1] at chunk edges -> [[a, b], ...] (for long straight parts). */
+export function chunkSpans(x0, x1) {
+  const out = [];
+  let a = x0;
+  for (const e of CHUNK_EDGES) {
+    if (e > a + 1e-6 && e < x1 - 1e-6) { out.push([a, e]); a = e; }
+  }
+  out.push([a, x1]);
+  return out;
+}
+
+/** Does chunk i lie (mostly) in the outlined near range? */
+export function chunkOutlined(i) {
+  const m = (CHUNK_EDGES[i] + CHUNK_EDGES[i + 1]) / 2;
+  return m > OUTLINE_X[0] && m < OUTLINE_X[1];
+}
+
+/**
+ * Split an indexed geometry into per-chunk geometries by triangle centroid x.
+ * Returns [{ chunk, geometry }]; vertices are compacted per chunk so bounding
+ * volumes are tight.
+ */
+export function splitByChunks(g) {
+  const idx = g.index.array;
+  const pos = g.attributes.position.array;
+  const nTri = idx.length / 3;
+  const nC = CHUNK_EDGES.length - 1;
+  const triC = new Uint8Array(nTri);
+  const counts = new Uint32Array(nC);
+  for (let t = 0; t < nTri; t++) {
+    const cx = (pos[idx[t * 3] * 3] + pos[idx[t * 3 + 1] * 3] + pos[idx[t * 3 + 2] * 3]) / 3;
+    const c = chunkOf(cx);
+    triC[t] = c;
+    counts[c]++;
+  }
+  const used = [];
+  for (let c = 0; c < nC; c++) if (counts[c]) used.push(c);
+  if (used.length === 1) return [{ chunk: used[0], geometry: g }];
+  const nV = g.attributes.position.count;
+  const remap = new Int32Array(nV);
+  const names = Object.keys(g.attributes);
+  const out = [];
+  for (const c of used) {
+    remap.fill(-1);
+    const order = [];
+    const ni = new Uint32Array(counts[c] * 3);
+    let k = 0;
+    for (let t = 0; t < nTri; t++) {
+      if (triC[t] !== c) continue;
+      for (let j = 0; j < 3; j++) {
+        const v = idx[t * 3 + j];
+        if (remap[v] < 0) { remap[v] = order.length; order.push(v); }
+        ni[k++] = remap[v];
+      }
+    }
+    const ng = new THREE.BufferGeometry();
+    for (const name of names) {
+      const a = g.attributes[name];
+      const sz = a.itemSize;
+      const src = a.array;
+      const dst = new Float32Array(order.length * sz);
+      for (let i = 0; i < order.length; i++) for (let s = 0; s < sz; s++) dst[i * sz + s] = src[order[i] * sz + s];
+      ng.setAttribute(name, new THREE.BufferAttribute(dst, sz));
+    }
+    ng.setIndex(new THREE.BufferAttribute(order.length > 65535 ? ni : new Uint16Array(ni), 1));
+    out.push({ chunk: c, geometry: ng });
+  }
+  g.dispose();
+  return out;
+}
+
+/** Deterministic thinning by ctx.lod.density: keep() is true for ~density of calls. */
+export function thinner(rng, density) {
+  if (density >= 0.999) return () => true;
+  return () => rng() < density;
+}
+
 export const inCrossing = (x, pad = 0) => Math.abs(x - CROSSING.x) < 3.2 + pad;
 export const inInternalCrossing = (x, pad = 0) => Math.abs(x - STATION.internalCrossingX) < 1.7 + pad;
 export const inPlatformX = (x, pad = 0) => x > ZONE.platform[0] - pad && x < ZONE.platform[1] + pad;
@@ -231,18 +327,30 @@ export class Buckets {
     this.defs = new Map();
     this.lists = new Map();
   }
-  /** define a bucket: material + flags {noOutline, cast, receive, name, renderOrder} */
+  /** define a bucket: material + flags {noOutline, cast, receive, renderOrder, keep, low, chunk} */
   define(key, material, flags = {}) {
     this.defs.set(key, { material, ...flags });
     this.lists.set(key, []);
+  }
+  /** make `key` an alias of an existing bucket (same material / flags / draw call) */
+  alias(key, target) {
+    this.defs.set(key, { aliasOf: target });
+    this.lists.set(key, this.lists.get(target));
   }
   /** push a geometry (already in railway space).  color: paints it (unless it already has colours and color is null) */
   add(key, g, color = null, matrix = null) {
     if (matrix) g.applyMatrix4(matrix);
     if (color !== null && color !== undefined) paint(g, color);
     else if (!g.attributes.color) paint(g, '#ffffff');
-    const list = this.lists.get(key);
+    let list = this.lists.get(key);
     if (!list) throw new Error(`railway: unknown bucket ${key}`);
+    // low pieces (flat lids, slabs, rails of fences...) go to the non-casting twin bucket
+    const def = this.defs.get(key);
+    if (def.low) {
+      if (!g.boundingBox) g.computeBoundingBox();
+      if (g.boundingBox.max.y - g.boundingBox.min.y < 0.3) list = this.lists.get(def.low);
+      g.boundingBox = null;
+    }
     list.push(g);
     return g;
   }
@@ -286,23 +394,27 @@ export class Buckets {
   count(key) {
     return this.lists.get(key)?.length || 0;
   }
-  /** merge every bucket -> array of meshes */
+  /** merge every bucket and split it into x chunks -> array of meshes */
   finish() {
     const out = [];
     for (const [key, list] of this.lists) {
-      if (!list.length) continue;
       const def = this.defs.get(key);
+      if (!list.length || def.aliasOf) continue;
       const merged = this.geom.merge(list, def.keep || ['color']);
       if (!merged) continue;
-      merged.computeBoundingSphere();
-      merged.computeBoundingBox();
-      const mesh = new THREE.Mesh(merged, def.material);
-      mesh.name = `railway:${key}`;
-      mesh.castShadow = !!def.cast;
-      mesh.receiveShadow = def.receive !== false;
-      if (def.noOutline) mesh.userData.noOutline = true;
-      if (def.renderOrder) mesh.renderOrder = def.renderOrder;
-      out.push(mesh);
+      // tiny buckets (sign faces, fence panels) stay whole: one call beats culling a few quads
+      const parts = def.chunk === false ? [{ chunk: 'all', geometry: merged }] : splitByChunks(merged);
+      for (const { chunk, geometry } of parts) {
+        geometry.computeBoundingSphere();
+        geometry.computeBoundingBox();
+        const mesh = new THREE.Mesh(geometry, def.material);
+        mesh.name = `railway:${key}@${chunk}`;
+        mesh.castShadow = !!def.cast;
+        mesh.receiveShadow = def.receive !== false;
+        if (def.noOutline) mesh.userData.noOutline = true;
+        if (def.renderOrder) mesh.renderOrder = def.renderOrder;
+        out.push(mesh);
+      }
     }
     return out;
   }

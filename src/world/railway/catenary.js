@@ -14,10 +14,50 @@
  * vanish in the distance).  Masts carry number plates and high-voltage signs.
  */
 import * as THREE from 'three';
-import { RAIL } from '../../core/layout.js';
+import { RAIL, PLATFORM } from '../../core/layout.js';
 import { TRK, inCrossing } from './common.js';
 
 const C = RAIL.catenary;
+
+// ---------------------------------------------------------------------------
+// platform masts: portal columns that stand ON the platforms are moved to the
+// back half (clear of the tactile strip and the walking line), shifted in x to
+// clear the canopy columns, vending machine V2, benches and the 駅名標, and get
+// a flashing collar where they pass through the canopy decks (station.js).
+// ---------------------------------------------------------------------------
+const PLATFORM_MAST = {
+  zS: -25.3, // P1 back half (P1: edge -28.4 .. back -24.0)
+  zN: -38.25, // P2 back half (P2: edge -35.8 .. back -39.6)
+  /** x nudges for the planned mast positions that fall on the platforms */
+  shift: { '-25': -0.4, '20': 1.2 },
+};
+/** Canopy decks (mirrors station/furniture.js CANOPIES: x range, back / front edge z). */
+const CANOPY_DECKS = [
+  { x0: -38.2, x1: 12.4, zBack: -24.05, zFront: -28.1 },
+  { x0: -37.2, x1: 11.2, zBack: -39.55, zFront: -36.1 },
+];
+const CANOPY_Y_BACK = PLATFORM.top + 2.9;
+const CANOPY_Y_FRONT = PLATFORM.top + 3.15;
+
+const onPlatformX = (x) => x > PLATFORM.xMin - 5 && x < PLATFORM.xMax + 5;
+
+/** Canopy deck height at (x, z), or null when no canopy is overhead. */
+function canopyDeckY(x, z) {
+  for (const d of CANOPY_DECKS) {
+    const zMin = Math.min(d.zBack, d.zFront), zMax = Math.max(d.zBack, d.zFront);
+    if (x < d.x0 || x > d.x1 || z < zMin || z > zMax) continue;
+    const t = (z - d.zBack) / (d.zFront - d.zBack);
+    return CANOPY_Y_BACK + (CANOPY_Y_FRONT - CANOPY_Y_BACK) * t;
+  }
+  return null;
+}
+
+/** Mast placement for a planned x: [{x, z, baseY}] south / north, plus the (possibly nudged) x. */
+export function mastPlacement(x0) {
+  if (!onPlatformX(x0)) return { x: x0, zS: C.poleZ[0], zN: C.poleZ[1], baseY: 0, onPlatform: false };
+  const x = x0 + (PLATFORM_MAST.shift[String(x0)] || 0);
+  return { x, zS: PLATFORM_MAST.zS, zN: PLATFORM_MAST.zN, baseY: PLATFORM.top, onPlatform: true };
+}
 const POLE_H = 9.35;
 const STEEL = '#8b929a';
 const STEEL_D = '#6f767e';
@@ -27,7 +67,7 @@ const INS_WHITE = '#ecebe6';
 /** Which masts become lattice portals (station area) + the crossover portal. */
 export function catenaryPlan(crossover) {
   const xs = [];
-  for (let x = C.poleX0; x <= TRK.xMax; x += C.poleSpacing) xs.push(x);
+  for (let x = C.poleX0; x <= TRK.xMax; x += C.poleSpacing) xs.push(mastPlacement(x).x);
   const portals = new Set(xs.filter((x) => x > -75 && x < 70));
   const extra = [];
   if (crossover) extra.push(Math.round(crossover.xs + (crossover.xe - crossover.xs) * 0.38));
@@ -37,28 +77,36 @@ export function catenaryPlan(crossover) {
 export function buildCatenary(K, crossover) {
   const B = K.B;
   const plan = catenaryPlan(crossover);
-  const [zS, zN] = C.poleZ; // south (track A side), north (track B side)
-  const sideOf = (pz) => (pz === zS ? TRK.A : TRK.B);
   let plateIdx = 0;
 
   // support points (per track): x -> {msgY, cwZ}
   const supports = { A: [], B: [] };
   const allX = [...plan.xs, ...plan.extra].sort((a, b) => a - b);
+  const zsAt = new Map(); // x -> [south z, north z] (the feeder lines follow the masts)
   let stagger = 1;
 
   for (const x of allX) {
     const isExtra = plan.extra.includes(x);
     const portal = isExtra || plan.portals.has(x);
+    const place = mastPlacement(x);
+    const zS = place.zS, zN = place.zN; // south (track A side), north (track B side)
+    zsAt.set(x, [zS, zN]);
+    const y0 = place.baseY;
     for (const pz of [zS, zN]) {
-      if (portal) latticeColumn(B, x, pz);
+      if (portal) latticeColumn(B, x, pz, y0);
       else pipeMast(B, x, pz);
+      if (place.onPlatform) {
+        canopyCollar(B, x, pz);
+        // walkers bump into the column instead of passing through it
+        K.ctx.addCollider?.(x - 0.36, x + 0.36, pz - 0.36, pz + 0.36);
+      }
       K.mastSpots.push({ x, z: pz });
       K.occupy(x, pz, portal ? 0.7 : 0.55);
       const out = Math.sign(pz - TRK.zMid); // outward direction (away from the tracks)
       mastTopFittings(B, x, pz, out, portal);
       // number plate facing the track, high-voltage sign facing outward (walkers)
-      K.sign(`pole:${plateIdx++ % K.poleCount}`, 0.2, 0.35, x, 2.25, pz - out * (portal ? 0.24 : 0.17), out > 0 ? Math.PI : 0);
-      if (!inCrossing(x, 20) && (portal || Math.abs(x) < 160)) K.sign('warn:hvsmall', 0.28, 0.245, x, 2.75, pz + out * (portal ? 0.24 : 0.17), out > 0 ? 0 : Math.PI);
+      K.sign(`pole:${plateIdx++ % K.poleCount}`, 0.2, 0.35, x, y0 + 2.25, pz - out * (portal ? 0.24 : 0.17), out > 0 ? Math.PI : 0);
+      if (!inCrossing(x, 20) && (portal || Math.abs(x) < 160)) K.sign('warn:hvsmall', 0.28, 0.245, x, y0 + 2.75, pz + out * (portal ? 0.24 : 0.17), out > 0 ? 0 : Math.PI);
     }
     stagger = -stagger;
     if (portal) {
@@ -74,7 +122,7 @@ export function buildCatenary(K, crossover) {
       }
     } else {
       for (const pz of [zS, zN]) {
-        const tr = sideOf(pz);
+        const tr = pz === zS ? TRK.A : TRK.B;
         cantilever(K, x, pz, tr.z, stagger);
         supports[tr.id].push({ x, cwZ: tr.z + stagger * 0.2 });
       }
@@ -96,8 +144,8 @@ export function buildCatenary(K, crossover) {
     span(K, m, b, null, 0.18);
   }
   // feeder, distribution conductors and earth wire along each mast line
-  for (const pz of [zS, zN]) {
-    const out = Math.sign(pz - TRK.zMid);
+  for (const side of [0, 1]) {
+    const out = side === 0 ? 1 : -1; // south masts face +z, north masts -z
     const lines = [
       { dz: out * 0.95, y: 7.55, r: 0.026, sag: 0.75 }, // feeder (hangs below its bracket)
       { dz: out * 0.95, y: 8.97, r: 0.016, sag: 0.85, noLine: true }, // distribution x3 on the cross-arm
@@ -108,7 +156,7 @@ export function buildCatenary(K, crossover) {
     for (const l of lines) {
       for (let i = 0; i < allX.length - 1; i++) {
         const x0 = allX[i], x1 = allX[i + 1];
-        const a = new THREE.Vector3(x0, l.y, pz + l.dz), b = new THREE.Vector3(x1, l.y, pz + l.dz);
+        const a = new THREE.Vector3(x0, l.y, zsAt.get(x0)[side] + l.dz), b = new THREE.Vector3(x1, l.y, zsAt.get(x1)[side] + l.dz);
         K.wire(K.geom.catenaryPoints(a, b, l.sag * ((x1 - x0) / C.poleSpacing) ** 2, 12), l.r, 3, !!l.noLine);
       }
     }
@@ -126,29 +174,55 @@ function pipeMast(B, x, z) {
   B.cyl('vcSmall', 0.158, 0.158, 0.1, '#2d2e33', x, 1.53, z, 12, 0, 0, 0, true);
 }
 
-/** Square lattice column (4 angle chords + zig-zag lacing). */
-function latticeColumn(B, x, z) {
+/**
+ * Square lattice column (4 angle chords + zig-zag lacing).  y0 > 0: the column
+ * stands on a platform (small plinth and base plate instead of the big foundation).
+ */
+function latticeColumn(B, x, z, y0 = 0) {
   const hw = 0.21;
-  B.block('vc', 0.95, 0.32, 0.95, '#bdbab2', x, 0, z);
-  B.box('vc', 1.02, 0.05, 1.02, '#c9c6be', x, 0.34, z);
-  B.box('steel', 0.62, 0.05, 0.62, STEEL_D, x, 0.39, z); // base plate
+  let yb; // top of the base plate
+  if (y0 > 0) {
+    B.block('vc', 0.6, 0.1, 0.6, '#c4c1b9', x, y0, z); // grout plinth on the platform paving
+    B.box('steel', 0.5, 0.04, 0.5, STEEL_D, x, y0 + 0.12, z);
+    for (const [bx, bz] of [[-0.19, -0.19], [0.19, -0.19], [0.19, 0.19], [-0.19, 0.19]]) {
+      B.cyl('vcSmall', 0.018, 0.018, 0.05, '#55595f', x + bx, y0 + 0.14, z + bz, 6); // anchor nuts
+    }
+    // yellow/black caution band at knee height for the passengers
+    B.box('vcSmall', 0.5, 0.22, 0.5, '#e6c13f', x, y0 + 0.55, z);
+    B.box('vcSmall', 0.505, 0.05, 0.505, '#2c2d31', x, y0 + 0.55, z);
+    yb = y0 + 0.14;
+  } else {
+    B.block('vc', 0.95, 0.32, 0.95, '#bdbab2', x, 0, z);
+    B.box('vc', 1.02, 0.05, 1.02, '#c9c6be', x, 0.34, z);
+    B.box('steel', 0.62, 0.05, 0.62, STEEL_D, x, 0.39, z); // base plate
+    yb = 0.4;
+  }
   for (const [cx, cz] of [[-hw, -hw], [hw, -hw], [hw, hw], [-hw, hw]]) {
-    B.box('steel', 0.055, POLE_H - 0.4, 0.055, STEEL, x + cx, 0.4 + (POLE_H - 0.4) / 2, z + cz);
+    B.box('steel', 0.055, POLE_H - yb, 0.055, STEEL, x + cx, yb + (POLE_H - yb) / 2, z + cz);
   }
   const step = 0.55;
   const faces = [
     [[-hw, -hw], [hw, -hw]], [[hw, -hw], [hw, hw]], [[hw, hw], [-hw, hw]], [[-hw, hw], [-hw, -hw]],
   ];
   let k = 0;
-  for (let y = 0.45; y < POLE_H - step; y += step, k++) {
+  for (let y = yb + 0.05; y < POLE_H - step; y += step, k++) {
     for (const [p, q] of faces) {
       const [a, b] = k % 2 ? [p, q] : [q, p];
       B.bar('steel', { x: x + a[0], y, z: z + a[1] }, { x: x + b[0], y: y + step, z: z + b[1] }, 0.028, STEEL);
     }
   }
-  for (const y of [0.45, POLE_H - 0.05]) {
+  for (const y of [yb + 0.05, POLE_H - 0.05]) {
     for (const [p, q] of faces) B.bar('steel', { x: x + p[0], y, z: z + p[1] }, { x: x + q[0], y, z: z + q[1] }, 0.04, STEEL);
   }
+}
+
+/** Grey flashing collar where a platform column passes through a canopy deck. */
+function canopyCollar(B, x, z) {
+  const y = canopyDeckY(x, z);
+  if (y === null) return;
+  B.box('vc', 0.62, 0.36, 0.62, '#a9aeb3', x, y - 0.14, z); // boot around the girder zone
+  B.box('vc', 0.72, 0.05, 0.72, '#c3c7cb', x, y + 0.055, z); // flashing skirt on the deck
+  B.box('vc', 0.5, 0.1, 0.5, '#b4b9be', x, y + 0.13, z); // upstand
 }
 
 /** Rectangular truss girder spanning both tracks between two columns. */

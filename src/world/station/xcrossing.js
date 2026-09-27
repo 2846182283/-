@@ -8,7 +8,7 @@
  */
 import * as THREE from 'three';
 import { RAIL, STATION, PLATFORM } from '../../core/layout.js';
-import { PLAT } from './platforms.js';
+import { PLAT, SIGN_PLATE } from './platforms.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -112,7 +112,7 @@ export function buildInStationCrossing(kit, S, parent) {
     b.position.set(PLAT.xLandW + 0.14, yT + 1.25, nz);
     b.rotation.y = Math.PI / 2;
     parent.add(b);
-    kit.board(b, S.crossNotice, 1.05, 0.64, 0, 0, 0, 0, { thick: 0.025, frameColor: '#ffffff' });
+    kit.board(b, S.crossNotice, 1.05, 0.64, 0, 0, 0, 0, SIGN_PLATE(kit, S, 0.025));
   };
   post(zP1 - 0.1, 1);
   post(zP2 + 0.1, -1);

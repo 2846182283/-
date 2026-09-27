@@ -1,18 +1,17 @@
 /**
- * Builds every sakura in layout.TREES:
- *   - bark: one merged tube mesh per region (town / levee / far) -> 3 draw calls
- *   - blossom clumps: shared clump variants, InstancedMesh per (region, variant)
+ * Grows every sakura in layout.TREES and collects its render data:
+ *   - bark: tapered tube arrays per LOD cell, at two detail levels (full / coarse)
+ *   - blossom clumps: one item per blossom mass (drawn by lod.js at hi / lo / far detail)
  *   - blossom cards: alpha-tested sprigs covering the crown surface (+ a few 胴吹き
- *     tufts sprouting straight from old trunks on near trees)
- * Returns the meshes plus per-tree info (crown centre / radius / top) that the
- * pits, ground petals and falling-petal density map use.
+ *     tufts sprouting straight from old trunks on town trees)
+ *   - fringe cards: extra sprigs ringing the rim and hanging under every mass,
+ *     only drawn while the tree is close to the camera (near LOD)
+ * Returns per-tree records + per-cell bark, and per-tree info (crown centre /
+ * radius / top) that the pits, ground petals and falling-petal density map use.
  */
 import * as THREE from 'three';
-import { KINDS, growTree, addTwigs, appendBark, barkGeometry, newBarkArrays } from './treeGen.js';
-import { clumpGeometry, cardGeometry, buildInstances, mulberry } from './canopy.js';
-
-const HI_VARIANTS = 3;
-const LO_VARIANTS = 2;
+import { KINDS, growTree, addTwigs, appendBark, newBarkArrays } from './treeGen.js';
+import { mulberry, packItems } from './canopy.js';
 
 /** Which setting a tree stands in (drives its pit and a few style choices). */
 export function treeContext(t) {
@@ -24,10 +23,25 @@ export function treeContext(t) {
   return 'rail';
 }
 
+/**
+ * Render region: town trees get the finest bark, levee rows (incl. the far-bank row, which
+ * walkers on the levee path see from ~30 m) are a little cheaper, hillside dots cheapest.
+ */
 function regionOf(t) {
   if (t.kind === 'small') return 'far';
-  if (t.kind === 'row') return t.z < -90 ? 'far' : 'levee'; // far-bank row: seen across the river only
+  if (t.kind === 'row') return 'levee';
   return 'town';
+}
+
+/**
+ * LOD cell of a tree: town in 90 m x-runs split into station / near street / far street
+ * bands, levee rows in 70 m runs (the far bank, seen across the river, in 140 m runs),
+ * hillside dots in 300 m runs.
+ */
+function cellOf(t, region) {
+  if (region === 'town') return `town:${Math.floor(t.x / 90)},${t.z < 0 ? 0 : t.z < 60 ? 1 : 2}`;
+  if (region === 'levee') return t.z < -90 ? `levee:n${Math.floor(t.x / 140)}` : `levee:s${Math.floor(t.x / 70)}`;
+  return `far:${Math.floor(t.x / 300)}`;
 }
 
 // instance tints (multiply the painted value bands)
@@ -42,19 +56,60 @@ function pickTint(r) {
   for (const [w, c] of TINTS) { acc += w; if (r < acc) return c; }
   return TINTS[0][1];
 }
+const CARD_TINT = new THREE.Color(1, 0.94, 0.96);
 
-export function buildTrees(ctx, mats, opts = {}) {
+/** Atlas cell for a sprig: 0 pale, 1 pink, 2 with young leaves, 3 dense cluster. */
+function pickCell(r, leafy = 0.18) {
+  return r < 0.3 ? 0 : r < 0.62 - leafy * 0.5 ? 1 : r < 0.62 + leafy * 0.5 ? 2 : 3;
+}
+
+/** Sprigs covering one blossom mass: half ring the rim, half cover the upper faces. */
+function surfaceCards(c, n, rng, region, t, list) {
+  const tmp = new THREE.Vector3();
+  for (let k = 0; k < n; k++) {
+    const rimCard = k % 2 === 0;
+    const d = rimCard
+      ? new THREE.Vector3(rng() - 0.5, (rng() - 0.5) * 0.35, rng() - 0.5).normalize()
+      : new THREE.Vector3(rng() - 0.5, rng() * 1.5 - (region === 'levee' ? 0.85 : 0.6), rng() - 0.5).normalize();
+    if (d.dot(c.out) < -0.25) { d.x = -d.x; d.z = -d.z; }
+    const rim = rimCard ? 0.95 : region === 'levee' ? 0.9 : 0.78;
+    const p = c.p.clone().add(tmp.set(d.x * c.s.x * rim, d.y * c.s.y * 0.72 + c.s.y * 0.05, d.z * c.s.z * rim));
+    const face = d.clone().multiplyScalar(0.6).addScaledVector(c.out, 0.5).add(tmp.set(rng() - 0.5, rng() - 0.5, rng() - 0.5)).normalize();
+    const cs = (0.5 + rng() * 0.35) * Math.min(1.2, t.scale) * (region === 'levee' ? 1.25 : 1);
+    list.push({ p, face, roll: (rng() - 0.5) * 2.0, s: cs, cell: pickCell(rng()), color: c.color.clone().lerp(CARD_TINT, 0.15), out: c.out, sway: c.sway * 1.15 });
+  }
+}
+
+/**
+ * Near-LOD fringe for one mass: a scalloped ring of sprigs straddling the rim (breaks the
+ * mound's silhouette) and a few hanging under it (so undersides read as blossoms, not a
+ * flat lilac plate), with more young-leaf sprigs mixed in.
+ */
+function fringeCards(c, rng, t, list) {
+  const tmp = new THREE.Vector3();
+  const nRim = 5, nUnder = 3;
+  const a0 = rng() * Math.PI * 2;
+  for (let k = 0; k < nRim + nUnder; k++) {
+    const under = k >= nRim;
+    const a = under ? rng() * Math.PI * 2 : a0 + (k / nRim) * Math.PI * 2 + (rng() - 0.5) * 0.7;
+    const rr = under ? 0.25 + rng() * 0.55 : 1.0 + rng() * 0.12;
+    const dy = under ? -0.38 - rng() * 0.12 : (rng() - 0.35) * 0.4;
+    const p = c.p.clone().add(tmp.set(Math.cos(a) * rr * c.s.x * 0.8, dy * c.s.y + c.s.y * 0.05, Math.sin(a) * rr * c.s.z * 0.8));
+    const d = tmp.set(Math.cos(a), under ? -1.2 : 0.15, Math.sin(a)).normalize();
+    const face = d.clone().addScaledVector(c.out, 0.4).normalize();
+    const cs = (under ? 0.42 : 0.5) + rng() * 0.3;
+    const col = c.color.clone().lerp(CARD_TINT, 0.15);
+    if (under) col.multiplyScalar(0.94);
+    list.push({ p, face, roll: (rng() - 0.5) * 2.4, s: cs * Math.min(1.2, t.scale), cell: pickCell(rng(), 0.3), color: col, out: c.out, sway: c.sway * 1.2 });
+  }
+}
+
+export function buildTrees(ctx, opts = {}) {
   const { layout } = ctx;
   const infos = [];
-  const bark = { town: newBarkArrays(), levee: newBarkArrays(), far: newBarkArrays() };
-  const clumps = {
-    town: Array.from({ length: HI_VARIANTS }, () => []),
-    levee: Array.from({ length: LO_VARIANTS }, () => []),
-    far: [[]],
-  };
-  const cards = { town: [], levee: [] };
+  const records = [];
+  const cells = new Map();
   const heroCam = layout.CAMERAS.hero.pos;
-  const tmp = new THREE.Vector3();
 
   for (const t of layout.TREES) {
     const K = KINDS[t.kind];
@@ -62,6 +117,7 @@ export function buildTrees(ctx, mats, opts = {}) {
     if (opts.onlyNear && region !== 'town') continue;
     const rng = mulberry(t.seed);
     const context = treeContext(t);
+    const farBank = t.kind === 'row' && t.z < -90;
     // hero: the extra limb reaches out over the road, slightly toward the hero camera
     let heroDir = null;
     if (t.hero) {
@@ -71,21 +127,30 @@ export function buildTrees(ctx, mats, opts = {}) {
     const lean = t.lean ? { x: t.lean.x, z: t.lean.z } : { x: rng() - 0.5, z: rng() - 0.5 };
     const leanAmt = t.hero ? 0.22 : t.lean ? (t.kind === 'row' ? 0.14 : 0.22) : 0.05;
     const tree = growTree(t.kind, rng, { scale: t.scale, lean, leanAmt, heroDir, cheap: region === 'far' });
-    if (K.lod === 'hi') addTwigs(tree, rng, Math.round(tree.anchors.length * 0.25), t.scale);
+    // thin twigs poking out between / past the masses (dark strokes against the sky)
+    if (K.lod === 'hi') addTwigs(tree, rng, Math.round(tree.anchors.length * 0.4), t.scale);
 
+    // ---- bark, into the tree's LOD cell (full + coarse detail) ----
+    const key = cellOf(t, region);
+    let cell = cells.get(key);
+    if (!cell) {
+      cell = { key, region, trees: [], full: newBarkArrays(), coarse: newBarkArrays() };
+      cells.set(key, cell);
+    }
     // grown in world orientation (lean is a world direction), so no extra yaw
     const world = { x: t.x, y: t.y, z: t.z, ry: 0 };
-    appendBark(bark[region], tree, t.kind, world, rng, { maxLevel: region === 'town' ? 99 : region === 'levee' ? 2 : 1 });
+    if (region !== 'far') appendBark(cell.full, tree, t.kind, world, mulberry(t.seed ^ 77), { maxLevel: region === 'town' ? 99 : 2 });
+    appendBark(cell.coarse, tree, t.kind, world, mulberry(t.seed ^ 77), { maxLevel: region === 'town' ? 2 : 1, radialMul: region === 'far' ? 1 : 0.6 });
+
     const toW = (v, o) => o.set(t.x + v.x, t.y + v.y, t.z + v.z);
     const crownC = toW(tree.crownCentre, new THREE.Vector3());
     crownC.y -= tree.height * 0.12;
     const height = tree.height, radius = tree.radius;
+    const idx = records.length;
 
     // ---- clumps ----
-    const variants = region === 'town' ? HI_VARIANTS : region === 'levee' ? LO_VARIANTS : 1;
-    const list = clumps[region];
     const swayMul = region === 'far' ? 0 : t.hero ? 1.25 : region === 'levee' ? 0.8 : 1;
-    const clumpItems = [];
+    const clumps = [];
     let top = 0;
     for (const a of tree.anchors) {
       const p = toW(a.p, new THREE.Vector3());
@@ -101,43 +166,23 @@ export function buildTrees(ctx, mats, opts = {}) {
       const inner = 1 - THREE.MathUtils.clamp(p.clone().sub(crownC).setY(0).length() / Math.max(radius, 1), 0, 1);
       const ao = 1 - 0.1 * inner - 0.08 * (1 - hN);
       const tint = pickTint(rng());
-      const item = {
+      const stretch = 0.88 + rng() * 0.24; // one shared shape, so vary the proportions per mass
+      clumps.push({
         p, up, yaw: rng() * Math.PI * 2,
-        s: new THREE.Vector3(s, s * (0.6 + rng() * 0.2), s),
+        s: new THREE.Vector3(s * stretch, s * (0.6 + rng() * 0.2), s / stretch),
         color: new THREE.Color().setRGB(tint[0] * ao, tint[1] * ao * 0.98, tint[2] * Math.min(1, ao * 1.03)),
-        out, sway: (0.3 + 0.7 * hN) * swayMul * (a.lobe ? 1.3 : 1),
-      };
-      list[Math.floor(rng() * variants)].push(item);
-      clumpItems.push(item);
+        out, sway: (0.3 + 0.7 * hN) * swayMul * (a.lobe ? 1.3 : 1), tree: idx,
+      });
     }
 
     // ---- cards (flower sprigs covering the masses: fluffy silhouette + visible blossoms) ----
+    const cards = [];
+    const fringe = [];
     if (K.cards > 0 && region !== 'far') {
-      const clist = cards[region];
-      for (const c of clumpItems) {
-        const nc = K.cards * (t.hero ? 1.5 : 1);
-        const n = Math.floor(nc) + (rng() < nc % 1 ? 1 : 0);
-        for (let k = 0; k < n; k++) {
-          // a point on the upper / outer surface of the mass; cards straddle the surface
-          // (half inside, half out) at random tilts so both the face and the silhouette get flowers
-          // half of the sprigs ring the rim (breaks the faceted silhouette), the rest cover the faces
-          const d = k % 2 === 0
-            ? new THREE.Vector3(rng() - 0.5, (rng() - 0.5) * 0.35, rng() - 0.5).normalize()
-            : new THREE.Vector3(rng() - 0.5, rng() * 1.5 - (region === 'levee' ? 0.85 : 0.6), rng() - 0.5).normalize();
-          if (d.dot(c.out) < -0.25) { d.x = -d.x; d.z = -d.z; }
-          const rim = k % 2 === 0 ? 0.95 : region === 'levee' ? 0.9 : 0.78;
-          const p = c.p.clone().add(tmp.set(d.x * c.s.x * rim, d.y * c.s.y * 0.72 + c.s.y * 0.05, d.z * c.s.z * rim));
-          const rnd3 = new THREE.Vector3(rng() - 0.5, rng() - 0.5, rng() - 0.5);
-          const face = d.clone().multiplyScalar(0.6).addScaledVector(c.out, 0.5).add(rnd3).normalize();
-          const cs = (0.5 + rng() * 0.35) * Math.min(1.2, t.scale) * (region === 'levee' ? 1.25 : 1);
-          const r = rng();
-          const cell = r < 0.3 ? 0 : r < 0.62 ? 1 : r < 0.8 ? 2 : 3;
-          clist.push({
-            p, face, roll: (rng() - 0.5) * 2.0, s: cs, cell,
-            color: c.color.clone().lerp(new THREE.Color(1, 0.94, 0.96), 0.15),
-            out: c.out, sway: c.sway * 1.15,
-          });
-        }
+      for (const c of clumps) {
+        const nc = K.cards * (t.hero ? 1.5 : 1) * (farBank ? 0.5 : 1);
+        surfaceCards(c, Math.floor(nc) + (rng() < nc % 1 ? 1 : 0), rng, region, t, cards);
+        fringeCards(c, rng, t, fringe);
       }
       // 胴吹き: little flower tufts sprouting straight out of the old trunk
       if (region === 'town') {
@@ -149,50 +194,25 @@ export function buildTrees(ctx, mats, opts = {}) {
           const dir = new THREE.Vector3(Math.cos(a), 0.3, Math.sin(a)).normalize();
           const pp = toW(trunk.pts[i], new THREE.Vector3()).addScaledVector(dir, trunk.radii[i] * 0.85);
           if (pp.y - t.y < 0.9) continue;
-          clist.push({ p: pp, face: dir, roll: (rng() - 0.5) * 0.8, s: 0.3 + rng() * 0.1, cell: rng() < 0.5 ? 3 : 0, color: new THREE.Color(1, 1, 1), out: dir, sway: 0.05 });
+          cards.push({ p: pp, face: dir, roll: (rng() - 0.5) * 0.8, s: 0.3 + rng() * 0.1, cell: rng() < 0.5 ? 3 : 0, color: new THREE.Color(1, 1, 1), out: dir, sway: 0.05 });
         }
       }
     }
 
-    infos.push({
+    const info = {
       tree: t, context, region, height, radius,
       crown: { x: crownC.x, z: crownC.z, y: crownC.y }, top,
       trunkR: tree.trunkR,
       base: { x: t.x, y: t.y, z: t.z },
-    });
+    };
+    infos.push(info);
+    const rec = {
+      idx, info, cell: key, region,
+      centre: crownC.clone(), radius: Math.max(radius, height * 0.5) + 1.0,
+      clumps: packItems(clumps), cards, fringe: packItems(fringe),
+    };
+    records.push(rec);
+    cell.trees.push(rec);
   }
-
-  // ---- meshes ----
-  const group = new THREE.Group();
-  group.name = 'sakura_trees';
-  for (const region of Object.keys(bark)) {
-    if (!bark[region].pos.length) continue;
-    const m = new THREE.Mesh(barkGeometry(bark[region]), mats.bark);
-    m.name = `sakura_bark_${region}`;
-    m.castShadow = region !== 'far';
-    m.receiveShadow = true;
-    group.add(m);
-  }
-  const geos = {
-    town: Array.from({ length: HI_VARIANTS }, (_, i) => clumpGeometry(i, 'hi')),
-    levee: Array.from({ length: LO_VARIANTS }, (_, i) => clumpGeometry(i + 10, 'lo')),
-    far: [clumpGeometry(20, 'far')],
-  };
-  const stats = { clumps: 0, cards: 0 };
-  for (const region of Object.keys(clumps)) {
-    clumps[region].forEach((items, v) => {
-      if (!items.length) return;
-      const im = buildInstances(geos[region][v], mats.clump, items, { depthMaterial: mats.clumpDepth, castShadow: region !== 'far', name: `sakura_clumps_${region}_${v}` });
-      group.add(im);
-      stats.clumps += items.length;
-    });
-  }
-  const cardGeo = cardGeometry();
-  for (const region of Object.keys(cards)) {
-    if (!cards[region].length) continue;
-    const im = buildInstances(cardGeo, mats.card, cards[region], { cells: true, noOutline: true, castShadow: region === 'town', name: `sakura_cards_${region}` });
-    group.add(im);
-    stats.cards += cards[region].length;
-  }
-  return { group, infos, stats };
+  return { infos, records, cells: [...cells.values()] };
 }

@@ -14,6 +14,7 @@ import { TERRAIN, RAIL, PLATFORM, POLE_LINES, TREES, LOTS, makeRng, groundY } fr
 import { LIFT, LP, NR, LANES, onRoad, inPlaza, GeoBuilder, fbm } from './common.js';
 import { WATERLINE, REVET } from './river.js';
 import { PLAZA_Y, plazaTrees } from './paving.js';
+import { inBridge } from './bridge.js';
 
 const SWAY = {
   key: 'terrainTuftSway',
@@ -126,6 +127,7 @@ export function buildVegetation(ctx, { gutterRuns, stairs, carPark, crops = [], 
   const p = new THREE.Vector3();
 
   const tuft = (list, x, y, z, h, wScale = 1, palette = GREENS) => {
+    if (inBridge(x, z)) return; // keep the deck / abutments clean
     e.set(0, rng() * Math.PI * 2, 0);
     q.setFromEuler(e);
     s.set(h * 0.9 * wScale, h, h * 0.9 * wScale);
@@ -144,6 +146,7 @@ export function buildVegetation(ctx, { gutterRuns, stairs, carPark, crops = [], 
 
   // flower heads: disc on a stem (merged geometry)
   const flower = (x, y, z, kind) => {
+    if (inBridge(x, z)) return;
     const colors = {
       dandelion: [[1.0, 0.78, 0.18], 0.032],
       clover: [[0.98, 0.96, 0.92], 0.024],

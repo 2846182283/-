@@ -8,13 +8,21 @@
  *   decals  manholes (incl. the sakura design), patches, stains, spray marks,
  *           leaves, tree-pit soil
  */
-import { drawTexture, seeded, roundRect, FONTS } from '../../core/canvasTex.js';
+import { drawTexture, seeded, roundRect, verticalText, FONTS } from '../../core/canvasTex.js';
 import { rgba, crack } from './textures.js';
 
 // ---------------------------------------------------------------------------
 // road paint atlas
 // ---------------------------------------------------------------------------
 const WHITE_PAINT = '#eeede6';
+
+/** Bronze name plates for the bridge end posts (親柱): cell key -> vertical text. */
+export const BRIDGE_PLATES = {
+  'plate:name': '桜橋',
+  'plate:kana': 'さくらばし',
+  'plate:river': '春風川',
+  'plate:date': '令和三年三月竣功',
+};
 const YELLOW_PAINT = '#f2c53d';
 
 /**
@@ -165,6 +173,24 @@ export function markingsAtlas(whiteChars, yellowChars) {
       ctx.beginPath(); ctx.moveTo(0, -48); ctx.lineTo(34, -12); ctx.lineTo(54, 12); ctx.stroke();
       ctx.restore();
       wear(cx, cy, 260);
+    }
+    // bridge name plates: a portrait bronze plate in the middle 56 % of the cell
+    // (the plate quad samples just that strip), engraved-look vertical text
+    for (const [key, text] of Object.entries(BRIDGE_PLATES)) {
+      const [cx, cy] = alloc(key);
+      const pw = C * 0.56, px = cx + (C - pw) / 2;
+      ctx.fillStyle = '#5f5037';
+      ctx.fillRect(px, cy, pw, C);
+      ctx.strokeStyle = '#a58f63';
+      ctx.lineWidth = 6;
+      ctx.strokeRect(px + 7, cy + 7, pw - 14, C - 14);
+      // soft verdigris bloom near the bottom edge
+      const gr = ctx.createLinearGradient(0, cy + C * 0.7, 0, cy + C);
+      gr.addColorStop(0, 'rgba(120,160,140,0)');
+      gr.addColorStop(1, 'rgba(120,160,140,0.35)');
+      ctx.fillStyle = gr;
+      ctx.fillRect(px, cy, pw, C);
+      verticalText(ctx, text, px + pw / 2, cy + 18, cy + C - 18, { font: FONTS.mincho, weight: 700, color: '#eadcb4', width: pw * 0.62, maxSize: 64 });
     }
   }, { mipmaps: true });
   tex.anisotropy = 8;

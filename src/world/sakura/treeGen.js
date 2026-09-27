@@ -153,7 +153,8 @@ export function growTree(kind, rng, opts = {}) {
     const yy = Hs * s * (s > 0 ? 0.85 : 1.1);
     const c = new THREE.Vector3(shellC.x + dir.x * rr * inward, shellC.y + yy * inward, shellC.z + dir.z * rr * inward);
     const n = Math.max(2, perSheet - 1 + Math.floor(rng() * 3));
-    addSheet(c, n, cl * (0.75 + rng() * 0.35), false, dir);
+    // masses within a sheet overlap by ~25% so no sky shows between them (gaps stay between sheets)
+    addSheet(c, n, cl * (0.6 + rng() * 0.28), false, dir);
   }
   // hero: a low lobe of blossom sheets carried by a limb reaching over the road
   if (opts.heroDir) {
@@ -163,7 +164,7 @@ export function growTree(kind, rng, opts = {}) {
       const c = top.clone().addScaledVector(hd, R * t);
       c.y = trunkH + (0.7 + 0.8 * Math.sin(t * 2.4)) * sc; // arches up, then droops at the tip
       c.addScaledVector(new THREE.Vector3(-hd.z, 0, hd.x), (rng() - 0.5) * 2.4 * sc);
-      addSheet(c, 4, cl * 0.85, true, hd.clone().setY(0.1).normalize());
+      addSheet(c, 4, cl * 0.7, true, hd.clone().setY(0.1).normalize());
     }
   }
 
@@ -248,7 +249,7 @@ export function addTwigs(tree, rng, count, sc) {
 /**
  * Append tapered tubes for every branch into `out` (arrays of numbers).
  * Vertex colours carry bark tint: moss on the shady lower trunk, reddish young twigs.
- * opts.maxLevel: skip finer branches (cheap far trees).
+ * opts.maxLevel: skip finer branches (cheap far trees); opts.radialMul: fewer sides (coarse LOD).
  */
 export function appendBark(out, tree, kind, world, rng, opts = {}) {
   const K = KINDS[kind];
@@ -259,7 +260,7 @@ export function appendBark(out, tree, kind, world, rng, opts = {}) {
   const wp = new THREE.Vector3();
   for (const br of tree.branches) {
     if (br.level > maxLevel) continue;
-    const radial = K.radial[Math.min(br.level, K.radial.length - 1)];
+    const radial = Math.max(3, Math.round(K.radial[Math.min(br.level, K.radial.length - 1)] * (opts.radialMul ?? 1)));
     const P = br.pts.map((v) => toWorld(v, new THREE.Vector3()));
     const base = out.pos.length / 3;
     let vAcc = 0;

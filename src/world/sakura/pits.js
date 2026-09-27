@@ -90,6 +90,48 @@ function blobGeometry(cx, cz, r, rnd, groundY, dy, segs = 14) {
   return g;
 }
 
+/**
+ * Soil / moss patch that hugs curved ground (levee shoulders, garden slopes): concentric
+ * rings sampled on the terrain, lifted a little more where the ground is steep so the flat
+ * triangles between samples never dip under the surface.
+ */
+function drapedPatch(cx, cz, r, rnd, groundY, dy, segs = 16, rings = 3) {
+  const lift = (x, z) => {
+    const e = 0.35;
+    const sx = (groundY(x + e, z) - groundY(x - e, z)) / (2 * e), sz = (groundY(x, z + e) - groundY(x, z - e)) / (2 * e);
+    return groundY(x, z) + dy + 0.05 * Math.min(1.5, Math.hypot(sx, sz));
+  };
+  const pos = [cx, lift(cx, cz), cz];
+  const idx = [];
+  const ph = rnd() * 6.28;
+  const edge = [];
+  for (let i = 0; i < segs; i++) {
+    const a = (i / segs) * Math.PI * 2;
+    edge.push(r * (0.75 + 0.25 * Math.sin(a * 3 + ph) + 0.12 * (rnd() - 0.5)));
+  }
+  for (let k = 1; k <= rings; k++) {
+    const f = k / rings;
+    for (let i = 0; i < segs; i++) {
+      const a = (i / segs) * Math.PI * 2;
+      const x = cx + Math.cos(a) * edge[i] * f, z = cz + Math.sin(a) * edge[i] * f;
+      pos.push(x, lift(x, z), z);
+    }
+  }
+  for (let i = 0; i < segs; i++) idx.push(0, 1 + ((i + 1) % segs), 1 + i);
+  for (let k = 1; k < rings; k++) {
+    const a0 = 1 + (k - 1) * segs, b0 = 1 + k * segs;
+    for (let i = 0; i < segs; i++) {
+      const j = (i + 1) % segs;
+      idx.push(a0 + i, a0 + j, b0 + i, a0 + j, b0 + j, b0 + i);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
 /** Low-poly rough stone (squashed, jittered icosahedron) with smooth normals, so the
  *  outline pass draws its silhouette rather than every facet. */
 function stoneGeometry(rnd, s) {
@@ -252,17 +294,17 @@ export function buildPits(ctx, infos, texs) {
       // ---- natural soil patch ----
       const small = inf.context === 'levee';
       const R = (small ? 0.8 : 0.85) + inf.trunkR * 1.2;
-      const sg = blobGeometry(x, z, R, rnd, groundY, 0.018, 16);
+      const sg = drapedPatch(x, z, R, rnd, groundY, 0.02, 16, 3);
       const soil = new THREE.Mesh(sg, soilMat);
       soil.castShadow = false;
       soil.userData.noOutline = true;
       root.add(soil);
       if (!small || Math.abs(x) < 110) {
-        const mm = new THREE.Mesh(blobGeometry(x + (rnd() - 0.5) * R, z + (rnd() - 0.5) * R, 0.25, rnd, groundY, 0.024, 10), mossMat);
+        const mm = new THREE.Mesh(drapedPatch(x + (rnd() - 0.5) * R, z + (rnd() - 0.5) * R, 0.25, rnd, groundY, 0.026, 10, 2), mossMat);
         mm.userData.noOutline = true;
         mm.castShadow = false;
         root.add(mm);
-        addTufts(x, z, null, small ? 22 : 45, rnd, { r: R * 1.05 });
+        addTufts(x, z, null, Math.round((small ? (z < -90 ? 10 : 16) : 45) * ctx.lod.density), rnd, { r: R * 1.05 });
         addFlowers(x, z, null, small ? 3 : 6, rnd, R * 1.1);
       }
       ctx.addCollider(x - inf.trunkR * 1.3, x + inf.trunkR * 1.3, z - inf.trunkR * 1.3, z + inf.trunkR * 1.3);
@@ -274,9 +316,14 @@ export function buildPits(ctx, infos, texs) {
   const baked = geom.bakeStatic(root, { name: 'sakura_pits_static' });
   out.add(baked);
   const grassMat = toon.mat('#ffffff', { vertexColors: true, side: THREE.DoubleSide, name: 'sakura_grass' });
-  const tuftIm = geom.instanced(tuftGeometry(), grassMat, tufts, { castShadow: false, noOutline: true });
-  tuftIm.name = 'sakura_grass_tufts';
-  out.add(tuftIm);
+  // town and levee tufts in separate meshes so each side can be frustum-culled
+  const tuftGeo = tuftGeometry();
+  for (const [name, list] of [['town', tufts.filter((t) => t.z > -52)], ['levee', tufts.filter((t) => t.z <= -52)]]) {
+    if (!list.length) continue;
+    const im = geom.instanced(tuftGeo, grassMat, list, { castShadow: false, noOutline: true });
+    im.name = `sakura_grass_tufts_${name}`;
+    out.add(im);
+  }
   const flowerMat = toon.mat('#ffffff', { vertexColors: true, side: THREE.DoubleSide, name: 'sakura_wildflower' });
   const flIm = geom.instanced(flowerGeometry(), flowerMat, flowers, { castShadow: false, noOutline: true });
   flIm.name = 'sakura_wildflowers';

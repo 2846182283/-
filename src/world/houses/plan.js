@@ -44,6 +44,8 @@ const pickW = (r, items) => {
  */
 const NORTH_SPECIAL = { NR09: 'apartment', NR11: 'oldWing', NR04: 'oldWing' };
 const NORTH_ROOFS = ['gableX', 'hip', 'gableZ', 'shed', 'hip', 'gableX', 'gableZ', 'hip', 'shed', 'gableX'];
+/** North-row houses that hang their laundry on a levee-side (rear) balcony. */
+const NORTH_REAR_BALCONY = new Set(['NR03', 'NR06', 'NR14', 'NR19']);
 
 /** Detail level for a lot. */
 export function lodFor(lot) {
@@ -208,10 +210,10 @@ export function makePlan(lot) {
     }
   } else if (main.floors === 2 && lod !== 'simple' && special !== 'oldWing') {
     // north-facing fronts: many at the back; the north row hangs some laundry on the levee side too
-    const rearN = north && (lot.seed >>> 3) % 4 === 0;
+    const rearN = north && NORTH_REAR_BALCONY.has(lot.id);
     const faceFront = !rearN && !(lot.front.dirZ < -0.7 && lot.street === 'stationFront' && r() < 0.6);
     const bf = plan.facade('main', faceFront ? 'front' : 'back');
-    if (r() < 0.72 && bf.L > 4.4) {
+    if ((rearN || r() < 0.72) && bf.L > 4.4) {
       const bw = Math.min(bf.L - 1.0, r.range(2.6, Math.max(2.7, bf.L * 0.75)));
       const bu0 = r() < 0.5 ? r.range(0.3, Math.max(0.35, bf.L - bw - 0.3)) : (bf.L - bw) / 2;
       plan.balcony = {

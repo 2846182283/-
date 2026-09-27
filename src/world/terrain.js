@@ -12,6 +12,8 @@
  *   decals      manholes, patches, stains, spray marks, leaves (terrain/decals.js)
  *   paths       levee / railway gravel paths, levee stairs, drainage troughs
  *   river       stylised toon water + stone revetment (terrain/river.js)
+ *   bridge      concrete footbridge over the river at layout BRIDGE (terrain/bridge.js)
+ *   lanes       residential lane ends, vegetable plots, gravel car parks (terrain/lanes.js)
  *   vegetation  grass tufts, reeds, flowers (terrain/vegetation.js)
  *
  * Each surface family is emitted straight into one merged geometry per
@@ -32,6 +34,8 @@ import { buildDecals } from './terrain/decals.js';
 import { buildPaths } from './terrain/paths.js';
 import { buildRiver } from './terrain/river.js';
 import { buildVegetation } from './terrain/vegetation.js';
+import { buildLanes } from './terrain/lanes.js';
+import { buildBridge } from './terrain/bridge.js';
 
 /** Height of the asphalt surface at (x, z) (roads sit 3 cm above layout.groundY). */
 export function roadSurfaceY(x, z) {
@@ -80,6 +84,8 @@ export default async function build(ctx) {
     tactile: toon.mat('#ffffff', { map: tex.tactile, vertexColors: true, name: 'terrainTactile' }),
     gutter: toon.mat('#ffffff', { map: tex.gutter, name: 'terrainGutter' }),
     marks: toon.mat('#ffffff', { map: marksAtlas.texture, vertexColors: true, transparent: true, depthWrite: false, polygonOffset: 2, name: 'terrainMarks' }),
+    plates: toon.mat('#ffffff', { map: marksAtlas.texture, vertexColors: true, name: 'terrainPlates' }),
+    bridgeRail: toon.metal('#a8c7b3', { vertexColors: true, name: 'terrainBridgeRail' }),
     decals: toon.mat('#ffffff', { map: decAtlas.texture, vertexColors: true, transparent: true, depthWrite: false, polygonOffset: 1, name: 'terrainDecals' }),
   };
   M.concreteRaised = M.concrete;
@@ -95,8 +101,11 @@ export default async function build(ctx) {
   buildDecals(bins, decAtlas, { grateSpots: gutters.grateSpots, hydrants: marks.hydrants });
   const paths = buildPaths(ctx, bins);
   root.add(ctx.geom.bakeStatic(paths.rail, { name: 'terrain:handrail' }));
+  const lanes = buildLanes(ctx, bins, marksAtlas);
+  if (lanes.stakeMesh) root.add(lanes.stakeMesh);
+  root.add(buildBridge(ctx, bins, marksAtlas, toon.metal('#a8c7b3', { name: 'terrainBaluster' })).balusters);
   buildRiver(ctx, bins, tex).forEach((m) => root.add(m));
-  const veg = buildVegetation(ctx, { gutterRuns: gutters.runs, stairs: paths.stairs, carPark: paths.carPark });
+  const veg = buildVegetation(ctx, { gutterRuns: gutters.runs, stairs: paths.stairs, carPark: paths.carPark, crops: lanes.crops, grassPlots: lanes.grassPlots });
   veg.meshes.forEach((m) => root.add(m));
 
   // ---- emit one mesh per bin ---------------------------------------------------
@@ -107,7 +116,7 @@ export default async function build(ctx) {
     const mesh = new THREE.Mesh(b.build(), mat);
     mesh.name = `terrain:${name}`;
     mesh.receiveShadow = true;
-    mesh.castShadow = name === 'concreteRaised'; // only stairs, copings, wheel stops stand proud
+    mesh.castShadow = name === 'concreteRaised' || name === 'bridgeRail'; // only stairs, copings, wheel stops, the bridge stand proud
     if (name === 'marks' || name === 'decals') {
       mesh.userData.noOutline = true;
       mesh.renderOrder = name === 'decals' ? -3 : -2;
@@ -116,5 +125,20 @@ export default async function build(ctx) {
     root.add(mesh);
   }
   root.userData.stats = { tufts: veg.counts };
+  if (ctx.params?.get('tstats')) logStats(root); // ?tstats=1: per-mesh triangle counts (debug)
   return root;
+}
+
+/** Debug: print triangles per terrain mesh (instances multiplied) as one console warning. */
+function logStats(root) {
+  const rows = [];
+  let total = 0;
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const g = o.geometry;
+    const tris = ((g.index ? g.index.count : g.attributes.position.count) / 3) * (o.isInstancedMesh ? o.count : 1);
+    total += tris;
+    rows.push(`${o.name || o.material.name}:${Math.round(tris / 1000)}k${o.userData.noOutline ? '' : '*'}`);
+  });
+  console.warn(`terrain meshes=${rows.length} tris=${Math.round(total / 1000)}k (* = outlined) ${rows.join(' ')}`);
 }

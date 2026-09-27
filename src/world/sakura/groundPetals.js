@@ -299,8 +299,12 @@ export function buildGroundPetals(ctx, infos) {
   // ---- meshes: split by area so each can be frustum-culled ----
   const mat = toon.mat('#ffffff', { vertexColors: true, side: THREE.DoubleSide, polygonOffset: 2, onShaderKey: 'sakura-petal-lift', onShader: petalLift, name: 'sakura_ground_petal' });
   const geo = petalGeometry();
-  const areas = { street: [], station: [], levee: [] };
-  for (const it of items) (it.z > 9 ? areas.street : it.z > -52 ? areas.station : areas.levee).push(it);
+  // street / station / levee, the long levee strip cut into 90 m runs along x
+  const areas = {};
+  for (const it of items) {
+    const key = it.z > 9 ? 'street' : it.z > -52 ? 'station' : `levee${Math.floor(it.x / 90)}`;
+    (areas[key] ||= []).push(it);
+  }
   const group = new THREE.Group();
   group.name = 'sakura_ground_petals';
   for (const [name, list] of Object.entries(areas)) {

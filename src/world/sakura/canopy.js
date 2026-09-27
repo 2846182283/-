@@ -1,8 +1,9 @@
 /**
  * Sakura canopy: layered, sheet-like blossom clumps + alpha blossom cards.
  *
- * Clumps are flattened, lumpy low-poly mounds (a few shared variants) drawn as
- * InstancedMeshes; trees.js groups them into "sheets" of 3-5 masses.  Their
+ * Clumps are flattened, lumpy mounds (one shared shape at hi / lo / far detail,
+ * see lod.js) drawn as InstancedMeshes; trees.js groups them into overlapping
+ * "sheets" of 3-5 masses.  Their
  * look comes from three stacked tricks:
  *   1. per-clump value bands in the fragment shader (lilac underside -> soft
  *      pink -> pale -> near-white top), edges jittered by value noise so the
@@ -48,8 +49,11 @@ function vnoise(x, y, z) {
  * One lumpy mound: icosphere, slightly flattened underneath, displaced by
  * noise so the silhouette is scalloped rather than spherical.  UVs are a
  * per-mound spherical projection (u wraps `U` whole texture tiles).
+ * `scallop` adds a finer, outward-only ripple (near LOD): the low-frequency
+ * shape is identical at every detail level, so a finer mound encloses the
+ * coarse one that casts its shadow.
  */
-function lump(detail, seed, sx, sy, sz, ox, oy, oz) {
+function lump(detail, seed, sx, sy, sz, ox, oy, oz, scallop = 0) {
   let g = new THREE.IcosahedronGeometry(1, detail);
   g.deleteAttribute('normal');
   g.deleteAttribute('uv');
@@ -62,7 +66,12 @@ function lump(detail, seed, sx, sy, sz, ox, oy, oz) {
     uv[i * 2] = (Math.atan2(z, x) / (2 * Math.PI) + 0.5) * U;
     uv[i * 2 + 1] = (Math.asin(THREE.MathUtils.clamp(y, -1, 1)) / Math.PI + 0.5) * V;
     const n = vnoise(x * 1.9 + seed, y * 1.9 + seed * 0.3, z * 1.9 - seed) - 0.5;
-    const bump = 1 + n * 0.34;
+    let bump = 1 + n * 0.34;
+    if (scallop) {
+      // blossom-cluster scallops: sharp ridges between soft cushions
+      const r2 = vnoise(x * 5.2 - seed, y * 5.2 + seed, z * 5.2 + seed * 0.7);
+      bump += scallop * Math.pow(r2, 1.6);
+    }
     x *= bump; z *= bump; y *= bump;
     y = y < 0 ? y * 0.62 : y * 0.86; // softer underside, domed top
     p.setXYZ(i, x * sx + ox, y * sy + oy, z * sz + oz);
@@ -74,20 +83,20 @@ function lump(detail, seed, sx, sy, sz, ox, oy, oz) {
 }
 
 /**
- * A clump variant: a main mound with 1-2 smaller mounds around it, like a
- * cluster of blossom cushions.  Local size ~ [-1, 1] horizontally, y ~ [-0.5, 0.8].
+ * The clump shape at three detail levels (same silhouette family):
+ *   hi   near trees (<~15 m): detail-2 main mound with scalloped rim + detail-1 side mound (400 tris)
+ *   lo   the default (and the shadow caster of near trees): detail-1 + detail-0 (100 tris)
+ *   far  distant cells: detail-0 + detail-0 (40 tris)
+ * Local size ~ [-1, 1] horizontally, y ~ [-0.5, 0.8].
  */
 export function clumpGeometry(variant, lod) {
-  const rnd = mulberry(variant * 97 + (lod === 'hi' ? 1 : 7));
-  const detail = lod === 'far' ? 0 : 1;
-  const parts = [lump(detail, variant * 3.1, 0.8, 0.74, 0.8, 0, 0.05, 0)];
-  const nSub = lod === 'far' ? 0 : 1;
-  for (let k = 0; k < nSub; k++) {
-    const a = rnd() * Math.PI * 2;
-    const d = 0.5 + rnd() * 0.12;
-    const s = 0.52 + rnd() * 0.12;
-    parts.push(lump(0, variant * 3.1 + k + 1, s, s * 0.9, s, Math.cos(a) * d, -0.08 + rnd() * 0.16, Math.sin(a) * d));
-  }
+  const rnd = mulberry(variant * 97 + 1);
+  const main = lod === 'hi' ? 2 : lod === 'lo' ? 1 : 0;
+  const parts = [lump(main, variant * 3.1, 0.8, 0.74, 0.8, 0, 0.05, 0, lod === 'hi' ? 0.16 : 0)];
+  const a = rnd() * Math.PI * 2;
+  const d = 0.5 + rnd() * 0.12;
+  const s = 0.52 + rnd() * 0.12;
+  parts.push(lump(lod === 'hi' ? 1 : 0, variant * 3.1 + 1, s, s * 0.9, s, Math.cos(a) * d, -0.08 + rnd() * 0.16, Math.sin(a) * d, lod === 'hi' ? 0.12 : 0));
   const g = fixSeams(mergeParts(parts), parts);
   g.computeBoundingSphere();
   return g;
@@ -158,6 +167,19 @@ attribute vec4 aCanopy;   // xyz: direction out of the crown (world), w: sway we
 uniform float sakNBlend;
 varying float vSakH;
 `;
+// base clumps: per-instance tree id + a per-tree "drawn by the near LOD" mask (see lod.js)
+export const MASK_TREES = 256;
+const MASK_PARS = /* glsl */ `
+attribute float aTree;
+uniform vec4 sakHiMask[ ${MASK_TREES / 4} ];
+`;
+// collapse the whole instance to a point: zero-area triangles, no fragments
+const MASK_MAIN = /* glsl */ `
+{
+  int sakTi = int( aTree + 0.5 );
+  if ( sakHiMask[ sakTi >> 2 ][ sakTi & 3 ] > 0.5 ) transformed = vec3( 0.0 );
+}
+`;
 
 /** World-space sway + canopy-normal blend (shared by clumps, cards, depth + normal passes). */
 function swayMain(heightExpr) {
@@ -210,6 +232,7 @@ uniform vec3 sakBand0;
 uniform vec3 sakBand1;
 uniform vec3 sakBand2;
 uniform vec3 sakBand3;
+uniform vec3 sakLeaf;
 varying float vSakH;
 float sakHash( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }
 float sakNoise( vec2 p ) {
@@ -225,6 +248,9 @@ const BAND_MAIN = /* glsl */ `
   float h = vSakH + ( sakNoise( vMapUv * 2.2 ) - 0.5 ) * 0.34 + ( sakNoise( vMapUv * 7.0 ) - 0.5 ) * 0.1;
   vec3 bc = h < 0.28 ? sakBand0 : ( h < 0.52 ? sakBand1 : ( h < 0.78 ? sakBand2 : sakBand3 ) );
   diffuseColor.rgb *= bc;
+  // sparse yellow-green young-leaf flecks between the blossoms
+  float lf = sakNoise( vMapUv * 19.0 + 3.7 ) * sakNoise( vMapUv * 7.3 - 1.3 );
+  diffuseColor.rgb = mix( diffuseColor.rgb, sakLeaf, smoothstep( 0.5, 0.56, lf ) * step( 0.25, h ) * 0.85 );
 }
 `;
 
@@ -244,28 +270,28 @@ export function canopyMaterials(ctx, { floralMap, atlas }) {
     sakBand1: { value: new THREE.Color('#fad7e3') }, // soft sakura pink
     sakBand2: { value: new THREE.Color('#ffeaf1') }, // pale
     sakBand3: { value: new THREE.Color(PALETTE.sakuraWhite) }, // near-white lit top
+    sakLeaf: { value: new THREE.Color('#c2d68a') }, // young leaves (low-saturation yellow-green)
     sakCardNBlend: { value: 0.92 },
+    sakHiMask: { value: Array.from({ length: MASK_TREES / 4 }, () => new THREE.Vector4()) },
   };
-  const clumpPatch = {
-    key: 'sakura-clump',
-    uniforms,
-    pars: SWAY_PARS,
-    // clump-local height (0 bottom .. 1 top) nudged by the normal -> band selector
-    main: swayMain('clamp( position.y * 0.72 + 0.4 + normal.y * 0.2, 0.0, 1.0 )'),
+  // clump-local height (0 bottom .. 1 top) nudged by the normal -> band selector
+  const clumpMain = swayMain('clamp( position.y * 0.72 + 0.4 + normal.y * 0.2, 0.0, 1.0 )');
+  const clumpFrag = (shader) => {
+    Object.assign(shader.uniforms, uniforms);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>\n${GLOW_PARS}\n${BAND_PARS}`)
+      .replace('#include <color_fragment>', BAND_MAIN)
+      .replace('#include <opaque_fragment>', GLOW_MAIN);
   };
+  // base clumps (per-cell meshes): hidden where the near LOD mesh draws the same tree
+  const clumpPatch = { key: 'sakura-clump', uniforms, pars: SWAY_PARS + MASK_PARS, main: clumpMain + MASK_MAIN };
   const clump = toon.mat('#ffffff', {
-    map: floralMap,
-    rim: 0.35,
-    vertexPatch: clumpPatch,
-    onShaderKey: 'sakura-clump-frag',
-    onShader: (shader) => {
-      Object.assign(shader.uniforms, uniforms);
-      shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', `#include <common>\n${GLOW_PARS}\n${BAND_PARS}`)
-        .replace('#include <color_fragment>', BAND_MAIN)
-        .replace('#include <opaque_fragment>', GLOW_MAIN);
-    },
-    name: 'sakura_clump',
+    map: floralMap, rim: 0.35, vertexPatch: clumpPatch, onShaderKey: 'sakura-clump-frag', onShader: clumpFrag, name: 'sakura_clump',
+  });
+  // near LOD clumps (one dynamic mesh): same look, no mask
+  const clumpHiPatch = { key: 'sakura-clump-hi', uniforms, pars: SWAY_PARS, main: clumpMain };
+  const clumpHi = toon.mat('#ffffff', {
+    map: floralMap, rim: 0.35, vertexPatch: clumpHiPatch, onShaderKey: 'sakura-clump-frag', onShader: clumpFrag, name: 'sakura_clump_hi',
   });
 
   // cards: alpha-tested sprigs; the per-instance aCell attribute picks the atlas cell
@@ -331,10 +357,11 @@ export function canopyMaterials(ctx, { floralMap, atlas }) {
     Object.assign(shader.uniforms, uniforms, { toonTime: ctx.toon.TOON_UNIFORMS.toonTime, toonWind: ctx.toon.TOON_UNIFORMS.toonWind });
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#define SAK_NO_NORMAL\n#include <common>\nuniform float toonTime;\nuniform vec3 toonWind;\n${SWAY_PARS}`)
-      .replace('#include <begin_vertex>', `#include <begin_vertex>\n${clumpPatch.main}`);
+      .replace('#include <begin_vertex>', `#include <begin_vertex>\n${clumpMain}`);
   };
+  // (no mask here: the coarse base clumps of near trees keep casting their shadows)
   clumpDepth.customProgramCacheKey = () => 'sakura-clump-depth';
-  return { clump, card, clumpDepth, uniforms };
+  return { clump, clumpHi, card, clumpDepth, uniforms };
 }
 
 // ---------------------------------------------------------------------------
@@ -349,18 +376,19 @@ const _dir = new THREE.Vector3();
 const _q2 = new THREE.Quaternion();
 
 /**
- * Build an InstancedMesh from a list of items:
- *   { p: Vector3, up: Vector3 (orientation of local +Y), yaw, s: Vector3|number, color: Color, out: Vector3, sway, cell? }
+ * Pack a list of items into flat per-instance arrays:
+ *   { p: Vector3, up: Vector3 (orientation of local +Y), yaw, s: Vector3|number, color: Color, out: Vector3, sway, cell?, tree? }
  * Items with `face` (cards) turn local +Z toward it instead (+ `roll`); that static
  * orientation is what their shadows use, the visible card is billboarded in the shader.
+ * returns { n, mat (16/inst), col (3), can (4: crown-out dir + sway), cell (1), tree (1) }
  */
-export function buildInstances(geometry, material, items, opts = {}) {
-  const geo = geometry.clone();
+export function packItems(items) {
   const n = items.length;
-  const canopy = new Float32Array(Math.max(1, n) * 4);
-  const cell = opts.cells ? new Float32Array(Math.max(1, n)) : null;
-  const im = new THREE.InstancedMesh(geo, material, Math.max(1, n));
-  const col = new THREE.Color();
+  const pk = {
+    n,
+    mat: new Float32Array(n * 16), col: new Float32Array(n * 3), can: new Float32Array(n * 4),
+    cell: new Float32Array(n), tree: new Float32Array(n),
+  };
   for (let i = 0; i < n; i++) {
     const it = items[i];
     if (it.face) {
@@ -376,22 +404,67 @@ export function buildInstances(geometry, material, items, opts = {}) {
     }
     if (typeof it.s === 'number') _s.set(it.s, it.s, it.s); else _s.copy(it.s);
     _m.compose(it.p, _q, _s);
-    im.setMatrixAt(i, _m);
-    im.setColorAt(i, col.copy(it.color));
-    canopy[i * 4] = it.out.x; canopy[i * 4 + 1] = it.out.y; canopy[i * 4 + 2] = it.out.z; canopy[i * 4 + 3] = it.sway;
-    if (cell) cell[i] = it.cell || 0;
+    _m.toArray(pk.mat, i * 16);
+    pk.col[i * 3] = it.color.r; pk.col[i * 3 + 1] = it.color.g; pk.col[i * 3 + 2] = it.color.b;
+    pk.can[i * 4] = it.out.x; pk.can[i * 4 + 1] = it.out.y; pk.can[i * 4 + 2] = it.out.z; pk.can[i * 4 + 3] = it.sway;
+    pk.cell[i] = it.cell || 0;
+    pk.tree[i] = it.tree || 0;
   }
-  geo.setAttribute('aCanopy', new THREE.InstancedBufferAttribute(canopy, 4));
-  if (cell) geo.setAttribute('aCell', new THREE.InstancedBufferAttribute(cell, 1));
-  im.count = n;
-  im.instanceMatrix.needsUpdate = true;
-  if (im.instanceColor) im.instanceColor.needsUpdate = true;
-  im.castShadow = opts.castShadow !== false;
+  return pk;
+}
+
+/** Concatenate packs (same layout). */
+export function joinPacks(packs) {
+  let n = 0;
+  for (const p of packs) n += p.n;
+  const out = { n, mat: new Float32Array(n * 16), col: new Float32Array(n * 3), can: new Float32Array(n * 4), cell: new Float32Array(n), tree: new Float32Array(n) };
+  let o = 0;
+  for (const p of packs) {
+    out.mat.set(p.mat, o * 16); out.col.set(p.col, o * 3); out.can.set(p.can, o * 4);
+    out.cell.set(p.cell, o); out.tree.set(p.tree, o);
+    o += p.n;
+  }
+  return out;
+}
+
+/**
+ * Per-instance attributes of a pack (capacity >= pack.n, so dynamic meshes can be refilled).
+ * attrs.canopy / cell / tree are InstancedBufferAttributes to put on each LOD geometry.
+ */
+export function packAttributes(pk, capacity = pk.n, { cells = false, tree = false } = {}) {
+  const cap = Math.max(1, capacity);
+  const grow = (src, k) => { const a = new Float32Array(cap * k); a.set(src.subarray(0, Math.min(src.length, cap * k))); return a; };
+  return {
+    matrix: new THREE.InstancedBufferAttribute(grow(pk.mat, 16), 16),
+    color: new THREE.InstancedBufferAttribute(grow(pk.col, 3), 3),
+    canopy: new THREE.InstancedBufferAttribute(grow(pk.can, 4), 4),
+    cell: cells ? new THREE.InstancedBufferAttribute(grow(pk.cell, 1), 1) : null,
+    tree: tree ? new THREE.InstancedBufferAttribute(grow(pk.tree, 1), 1) : null,
+  };
+}
+
+/** A geometry that shares `base`'s vertex data and carries the given per-instance attributes. */
+export function instGeometry(base, attrs) {
+  const g = new THREE.BufferGeometry();
+  for (const k of Object.keys(base.attributes)) g.setAttribute(k, base.attributes[k]);
+  if (base.index) g.setIndex(base.index);
+  g.setAttribute('aCanopy', attrs.canopy);
+  if (attrs.cell) g.setAttribute('aCell', attrs.cell);
+  if (attrs.tree) g.setAttribute('aTree', attrs.tree);
+  g.boundingSphere = base.boundingSphere;
+  return g;
+}
+
+/** InstancedMesh over shared per-instance attributes (matrix / colour live on the mesh). */
+export function meshFromAttributes(geometry, material, attrs, count, opts = {}) {
+  const im = new THREE.InstancedMesh(geometry, material, 1);
+  im.instanceMatrix = attrs.matrix;
+  im.instanceColor = attrs.color;
+  im.count = count;
+  im.castShadow = !!opts.castShadow;
   im.receiveShadow = true;
   if (opts.noOutline) im.userData.noOutline = true;
   if (opts.depthMaterial) im.customDepthMaterial = opts.depthMaterial;
-  im.computeBoundingSphere();
-  im.computeBoundingBox();
   im.name = opts.name || 'sakura_instances';
   return im;
 }

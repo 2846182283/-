@@ -148,7 +148,7 @@ export function plant(B, D, kind, x, y, z, size, r) {
       const fc = r.pick(['#f29bb4', '#f7e39a', '#ffffff', '#c792d6', '#f28a6a', '#8fb8f0']);
       for (let i = 0; i < 6; i++) {
         const a = r() * 6.28, d = r() * size * 0.6;
-        B.stamp(T.blobs[0], mtx(x + Math.cos(a) * d, y + size * 0.55 + r() * 0.05, z + Math.sin(a) * d, 0, size * 0.18), i % 2 ? fc : shade(fc, 0.06));
+        B.stamp(T.blobsLow[i % 4], mtx(x + Math.cos(a) * d, y + size * 0.55 + r() * 0.05, z + Math.sin(a) * d, r() * 6, size * 0.18), i % 2 ? fc : shade(fc, 0.06));
       }
       break;
     }
@@ -158,7 +158,7 @@ export function plant(B, D, kind, x, y, z, size, r) {
       const hc = r.pick(['#9db8e8', '#b9a3e3', '#f2b8cf', '#a7c7f2', '#d6c2f0']);
       for (let i = 0; i < 5; i++) {
         const a = r() * 6.28, d = size * (0.35 + r() * 0.45);
-        B.stamp(T.blobs[i % 4], mtx(x + Math.cos(a) * d, y + size * (0.7 + r() * 0.35), z + Math.sin(a) * d, r() * 6, size * 0.34), i % 2 ? hc : shade(hc, 0.05, 1, 0.03));
+        B.stamp(T.blobsLow[i % 4], mtx(x + Math.cos(a) * d, y + size * (0.7 + r() * 0.35), z + Math.sin(a) * d, r() * 6, size * 0.34), i % 2 ? hc : shade(hc, 0.05, 1, 0.03));
       }
       break;
     }
@@ -178,8 +178,8 @@ export function plant(B, D, kind, x, y, z, size, r) {
       for (let i = 0; i < 4; i++) {
         const sx = x + (r() - 0.5) * size * 0.4, sz = z + (r() - 0.5) * size * 0.4, h = size * (1.6 + r() * 1.2);
         B.cyl('small', [sx, y, sz], [sx, y + h, sz], 0.012, '#7a6a48', 4);
-        B.stamp(blob(), mtx(sx, y + h, sz, r() * 6, size * 0.4, size * 0.3, size * 0.4), i % 2 ? '#7aa050' : '#b86a4a');
-        if (i < 2) B.stamp(T.blobs[1], mtx(sx + 0.04, y + h * 0.82, sz + 0.03, 0, size * 0.12), '#d8433d');
+        B.stamp(T.blobsLow[i % 4], mtx(sx, y + h, sz, r() * 6, size * 0.4, size * 0.3, size * 0.4), i % 2 ? '#7aa050' : '#b86a4a');
+        if (i < 2) B.stamp(T.blobsLow[1], mtx(sx + 0.04, y + h * 0.82, sz + 0.03, 0, size * 0.12), '#d8433d');
       }
       break;
     }
@@ -192,7 +192,7 @@ export function plant(B, D, kind, x, y, z, size, r) {
       const fc = r.pick(['#f08bb0', '#e76f9a', '#f7b6cc', '#ffffff']);
       for (let i = 0; i < 7; i++) {
         const a = r() * 6.28, d = size * (0.4 + r() * 0.5);
-        B.stamp(T.blobs[i % 4], mtx(x + Math.cos(a) * d, y + size * (0.5 + r() * 0.35), z + Math.sin(a) * d, 0, size * 0.22), fc);
+        B.stamp(T.blobsLow[i % 4], mtx(x + Math.cos(a) * d, y + size * (0.5 + r() * 0.35), z + Math.sin(a) * d, r() * 6, size * 0.22), fc);
       }
       break;
     }
@@ -443,14 +443,19 @@ function fenceRun(B, P, D, a, b, c, axis, type = P.fence, H = P.fenceH, cheap = 
       }
     } else if (type === 'hedge') {
       // trimmed hedge (生垣): a leafy core with a soft, lumpy crown on a stone curb
-      box('solid', s0, s1, g - 0.2, g + 0.12, -0.26, 0.26, '#b9b4aa');
+      // segments butt against each other: only the run ends are inset / capped, so the long
+      // hedge reads as one mass instead of a row of boxes
+      const first = i === 0, last = i === n - 1;
+      const ends = axis === 'x' ? ['x', 'X'] : ['z', 'Z'];
+      const endSkip = (first ? '' : ends[0]) + (last ? '' : ends[1]);
+      box('solid', s0, s1, g - 0.2, g + 0.12, -0.26, 0.26, '#b9b4aa', { skip: endSkip });
       const hc = P.hedgeColor;
-      box('leaf', s0 + 0.04, s1 - 0.04, g + 0.1, g + H - 0.16, -0.2, 0.2, shade(hc, -0.05), { skip: 'y' });
+      box('leaf', s0 + (first ? 0.04 : 0), s1 - (last ? 0.04 : 0), g + 0.1, g + H - 0.16, -0.2, 0.2, shade(hc, -0.05), { skip: 'y' + endSkip });
       // lumpy crown: low-poly clumps (the hedge is long, so each clump stays cheap)
       const step = cheap ? 0.5 : 0.34;
       for (let s = s0 + 0.16; s < s1 - 0.08; s += step) {
         const [hx, hz] = pt(s + (r() - 0.5) * 0.06);
-        B.stamp(D.tpl.blobsLow[Math.floor(r() * 4)], mtx(hx, g + H - 0.2 + r() * 0.04, hz, r() * 6, 0.27, 0.17, 0.26), shade(hc, (r() - 0.5) * 0.06));
+        B.stamp(D.tpl.blobsLow[Math.floor(r() * 4)], mtx(hx, g + H - 0.2 + r() * 0.05, hz, r() * 6, 0.3, 0.2, 0.28), shade(hc, 0.02 + (r() - 0.5) * 0.08));
       }
     }
     if (type !== 'hedge' && type !== 'block' && i === n - 1) {

@@ -13,12 +13,14 @@
  *   falling petals one GPU particle system (near / mid / far layers, wind spirals, train gusts)
  *
  * Code lives in src/world/sakura/*.js; this file wires it together.
- * URL debug: ?sakura=noPetals,noTrees,noPits,noGround,nearOnly (dev helpers).
+ * Level of detail / culling: sakura/lod.js (per-cell meshes + a dynamic near-tree layer).
+ * URL debug: ?sakura=noPetals,noTrees,noPits,noGround,nearOnly,stats (dev helpers).
  */
 import * as THREE from 'three';
 import { barkTexture, floralTexture, blossomAtlas } from './sakura/textures.js';
 import { canopyMaterials } from './sakura/canopy.js';
 import { buildTrees } from './sakura/trees.js';
+import { buildCanopyLod } from './sakura/lod.js';
 import { buildPits } from './sakura/pits.js';
 import { buildGroundPetals } from './sakura/groundPetals.js';
 import { buildFallingPetals } from './sakura/fallingPetals.js';
@@ -41,13 +43,18 @@ export default async function build(ctx) {
   const mats = {
     bark: ctx.toon.mat('#ffffff', { map: texs.bark, vertexColors: true, rim: 0.2, name: 'sakura_bark' }),
     clump: canopy.clump,
+    clumpHi: canopy.clumpHi,
     card: canopy.card,
     clumpDepth: canopy.clumpDepth,
   };
 
   // ---- trees ----
-  const trees = buildTrees(ctx, mats, { onlyNear: dbg.includes('nearOnly') });
-  if (!dbg.includes('noTrees')) root.add(trees.group);
+  const trees = buildTrees(ctx, { onlyNear: dbg.includes('nearOnly') });
+  const lod = buildCanopyLod(ctx, trees, mats);
+  if (!dbg.includes('noTrees')) {
+    root.add(lod.group);
+    ctx.onUpdate(() => lod.update(ctx.camera.position));
+  }
   if (!dbg.includes('noPits')) root.add(buildPits(ctx, trees.infos, texs));
 
   // ---- petals ----
@@ -55,7 +62,23 @@ export default async function build(ctx) {
   if (!dbg.includes('noGround')) root.add(gp.ground, gp.rafts);
   if (!dbg.includes('noPetals')) root.add(buildFallingPetals(ctx, trees.infos));
 
-  root.userData.stats = { trees: trees.infos.length, ...trees.stats, groundPetals: gp.count };
+  root.userData.stats = { trees: trees.infos.length, ...lod.stats, groundPetals: gp.count };
   if (ctx.params.has('shot')) console.info('[sakura]', JSON.stringify(root.userData.stats));
+  if (dbg.includes('stats')) logMeshStats(root);
   return root;
+}
+
+/** Dev helper (?sakura=stats): triangles per mesh at full instance count, as a console warning. */
+function logMeshStats(root) {
+  const rows = [];
+  let total = 0;
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const g = o.geometry;
+    const tri = (g.index ? g.index.count : g.attributes.position.count) / 3;
+    const n = o.isInstancedMesh ? o.count : 1;
+    total += tri * n;
+    rows.push(`${o.name}:${Math.round((tri * n) / 100) / 10}k${o.castShadow ? '*' : ''}`);
+  });
+  console.warn(`[sakura stats] total ${Math.round(total / 1000)}k tris (* = casts) ${rows.join(' ')}`);
 }

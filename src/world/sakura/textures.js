@@ -261,7 +261,7 @@ export function blossomAtlas() {
     const cells = [
       { ox: 0, oy: 0, tones: [0, 3, 3], n: 16, leaves: 0, buds: 3 },
       { ox: C, oy: 0, tones: [1, 0, 2], n: 18, leaves: 0, buds: 4 },
-      { ox: 0, oy: C, tones: [0, 3, 2], n: 12, leaves: 7, buds: 2 },
+      { ox: 0, oy: C, tones: [0, 3, 2], n: 12, leaves: 11, buds: 2 },
       { ox: C, oy: C, tones: [1, 1, 0, 2], n: 26, leaves: 0, buds: 2 },
     ];
     cells.forEach((cell, ci) => {

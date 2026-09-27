@@ -495,6 +495,14 @@ export function makeDecalAtlas() {
     fitText(c, '春の清掃', 6, 28, w - 12, 20, { font: FONTS.round, color: '#333', weight: 700 });
     c.fillStyle = '#999'; for (let k = 0; k < 6; k++) c.fillRect(8, 56 + k * 10, w - 16 - (k % 3) * 10, 3);
   });
+  // --- apartment name board (north-row アパート)
+  add('aptSign', 512, 114, (c, w, h) => {
+    c.fillStyle = '#f4f1e8'; c.fillRect(0, 0, w, h);
+    c.fillStyle = '#6f9fc4'; c.fillRect(0, h - 14, w, 6);
+    fitText(c, 'コーポ春風', 18, 8, w * 0.62, h * 0.66, { font: FONTS.round, color: '#3b5f7e', weight: 700, letterSpacing: 6 });
+    fitText(c, 'CORPO HARUKAZE', w * 0.64, h * 0.2, w * 0.34, h * 0.34, { font: FONTS.latin, color: '#6f8196', weight: 700 });
+    fitText(c, '桜ヶ丘2-9', w * 0.64, h * 0.52, w * 0.34, h * 0.26, { font: FONTS.gothic, color: '#8a8e93', weight: 400 });
+  });
   // --- alpha patterns: balcony bars, mesh fence, frosted lattice, shutter slats
   add('bars', 256, 128, (c, w, h) => {
     c.clearRect(0, 0, w, h);

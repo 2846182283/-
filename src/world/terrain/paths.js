@@ -41,7 +41,7 @@ export function gravelStripX(b, x0, x1, z0, z1, yFn, { tracks = [], step = 2, se
 }
 
 /** Straight gravel strip along z. */
-function gravelStripZ(b, z0, z1, x0, x1, yFn, seed = 3) {
+export function gravelStripZ(b, z0, z1, x0, x1, yFn, seed = 3) {
   const n = Math.max(1, Math.ceil(Math.abs(z1 - z0) / 1.5));
   const D = [0, 0.15, (x1 - x0) / 2, x1 - x0 - 0.15, x1 - x0];
   b.grid(D.length - 1, n, (i, j) => {

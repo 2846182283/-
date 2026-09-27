@@ -800,7 +800,11 @@ function buildTrees() {
     if (Math.abs(x + 5 + j * 0.7 - BRIDGE.x) > BRIDGE.halfWidth + 3.5) add(x + 5 + j * 0.7, -73.0, 'row', { scale: 0.85 + ((hashString(`lvn${x}`) % 25) / 100), lean: { x: 0, z: 0.6 } });
   }
   // far bank + hillside dots (cheap)
-  for (let x = -260; x <= 260; x += 16) add(x + ((hashString(`fb${x}`) % 60) / 10), -99.5, 'row', { scale: 0.8 });
+  // far-bank row: tighter pitch so the bank reads as a continuous pink band behind the river
+  for (let x = -260; x <= 260; x += 11.5) {
+    const fx = x + ((hashString(`fb${x}`) % 60) / 10) - 3;
+    if (Math.abs(fx - BRIDGE.x) > BRIDGE.halfWidth + 3.5) add(fx, -99.5, 'row', { scale: 0.8 + ((hashString(`fbs${x}`) % 20) / 100) });
+  }
   for (let i = 0; i < 40; i++) {
     const hx = -300 + (hashString(`hx${i}`) % 600);
     // between the far-town lanes (sky.js: lanes at farLeveeTopNorth - 40 - k*22 with houses at ±6 m)

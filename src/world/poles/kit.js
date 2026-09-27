@@ -171,18 +171,22 @@ export function createKit(ctx, atlas) {
     vcS: { mat: M.vc, noOutline: true, cast: false, vc: true },
     metal: { mat: M.metal, noOutline: false, cast: true, vc: true },
     metalS: { mat: M.metal, noOutline: true, cast: false, vc: true },
-    atlas: { mat: M.atlas, noOutline: false, cast: true, vc: false },
-    decal: { mat: M.decal, noOutline: true, cast: false, vc: false },
-    glow: { mat: M.glow, noOutline: true, cast: false, vc: false },
+    // the three atlas buckets are small (a few k triangles): one mesh each, not split by region
+    atlas: { mat: M.atlas, noOutline: false, cast: true, vc: false, whole: true },
+    decal: { mat: M.decal, noOutline: true, cast: false, vc: false, whole: true },
+    glow: { mat: M.glow, noOutline: true, cast: false, vc: false, whole: true },
     wire: { mat: M.wire, noOutline: true, cast: false, vc: false, raw: true },
   };
   // bucket -> region -> [geometry]
   const geoms = Object.fromEntries(Object.keys(defs).map((k) => [k, new Map()]));
   /** File a world-space geometry under its bucket + region (by bbox centre). */
   const file = (bucket, g) => {
-    g.computeBoundingBox();
-    _box.copy(g.boundingBox).getCenter(_ctr);
-    const reg = regionOf(_ctr.x, _ctr.z);
+    let reg = 'all';
+    if (!defs[bucket].whole) {
+      g.computeBoundingBox();
+      _box.copy(g.boundingBox).getCenter(_ctr);
+      reg = regionOf(_ctr.x, _ctr.z);
+    }
     const m = geoms[bucket];
     if (!m.has(reg)) m.set(reg, []);
     m.get(reg).push(g);

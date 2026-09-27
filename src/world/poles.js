@@ -115,7 +115,9 @@ export function planNetwork(ctx, byId) {
   // junction links: main street lines tie into the station-front line, crossing line into both roads
   link('PSF5', 'PMW0', 'full');
   link('PME0', 'PSF6', 'full');
-  // telecom cables cross the junction in front of the station (in the hero frame's sky)
+  // telecom cables cross the junction in front of the station: a long span along the station-front road
+  // (arcs through the hero frame's sky) and a diagonal one over the main-street mouth (café view)
+  link('PSF5', 'PSF6', 'tel');
   link('PMW0', 'PSF6', 'tel');
   link('PSF6', 'PCR0', 'full');
   link('PNR6', 'PCR2', 'full');
@@ -153,6 +155,19 @@ export function planGuys(ctx, plans, links, byId) {
   }
 }
 
+/**
+ * Wide shop fronts (the konbini's long fascia): slide the drop along the
+ * front to the end nearest its pole, so the cable lands at the corner instead
+ * of running diagonally across the whole signboard.
+ */
+function slideToPole(target, lot, wallDir, pole) {
+  const ux = -wallDir.z, uz = wallDir.x; // along the front
+  const half = lot.width / 2 - 0.7;
+  const s = THREE.MathUtils.clamp((pole.x - lot.front.x) * ux + (pole.z - lot.front.z) * uz, -half, half);
+  target.x = lot.front.x + ux * s + wallDir.x * 0.08;
+  target.z = lot.front.z + uz * s + wallDir.z * 0.08;
+}
+
 /** Service drops: each street lot gets a drop from the nearest pole (same side, sometimes across). */
 export function planDrops(ctx, plans, attach) {
   const L = ctx.layout;
@@ -178,6 +193,7 @@ export function planDrops(ctx, plans, attach) {
     if (!best) continue;
     const wallDir = new THREE.Vector3(lot.front.dirX, 0, lot.front.dirZ).normalize();
     const target = new THREE.Vector3(lot.drop.x, lot.drop.y, lot.drop.z).addScaledVector(wallDir, 0.08);
+    if (lot.type === 'konbini') slideToPole(target, lot, wallDir, best);
     // telecom drop lands 0.7 m along the wall, 0.45 m lower
     const along = new THREE.Vector3(-wallDir.z, 0, wallDir.x).multiplyScalar(h % 2 ? 0.7 : -0.7);
     drops.push({ pole: attach.get(best.id), target, wallDir, tel: h % 3 !== 0, telOffset: along.setY(-0.45) });

@@ -1005,11 +1005,15 @@ export const SPOTS = {
 const heroTree = TREES.find((t) => t.hero);
 const streetZ = heroTree.z + 9.5;
 const streetX = MAIN_STREET.centerX(streetZ) + 0.9;
-const heroZ = 24;
-const heroX = MAIN_STREET.centerX(heroZ) + 0.35;
+const heroZ = 19.5;
+const heroX = -1.6;
+const cafeZ = 24;
+const cafeX = MAIN_STREET.centerX(cafeZ) + 0.35;
 export const CAMERAS = {
-  // key frame: café awning in the foreground, 止まれ + zebra leading to the station, grand sakura left, crossing right
-  hero: { pos: [heroX, groundY(heroX, heroZ) + 1.5, heroZ], look: [-2.6, 3.5, -22], fov: 44, label: '站前 · 望向车站' },
+  // key frame (spec 十九): grand sakura framing the left, station centre-left, the arriving train and the
+  // level-crossing lights on the right, zebra + road lines leading in.  Best around t = 110-122.
+  hero: { pos: [heroX, groundY(heroX, heroZ) + 1.6, heroZ], look: [6, 4, -22], fov: 54, label: '站前 · 望向车站' },
+  cafe: { pos: [cafeX, groundY(cafeX, cafeZ) + 1.5, cafeZ], look: [-2.6, 3.5, -22], fov: 44, label: '咖啡店前' },
   street: { pos: [streetX, groundY(streetX, streetZ) + 1.45, streetZ], look: [-4.5, 4.0, -24], fov: 45, label: '商店街' },
   plaza: { pos: [-3.5, 1.5, 1.5], look: [-8, 3.2, -20], fov: 55, label: '站前广场' },
   crossing: { pos: [33.6, 1.55, -15.5], look: [30.5, 2.4, -33], fov: 50, label: '道口' },

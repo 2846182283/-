@@ -27,14 +27,15 @@ machines to hold the frame rate, and `?q=low` forces the light preset (see the U
 
 | Mode | How |
 | --- | --- |
-| Shots | Buttons along the bottom, or keys **1–7**: 站前, 商店街, 站前广场, 道口, 站台, 河堤, 俯瞰 |
+| Shots | Buttons along the bottom, or keys **1–8**: 站前 (key frame), 咖啡店前, 商店街, 站前广场, 道口, 站台, 河堤, 俯瞰 |
 | 巡游 (tour) | Cycles through the shots with slow dolly moves |
 | 漫游 (walk) | Click to lock the mouse. **WASD** / arrow keys move, **Shift** runs, **Esc** exits. On touch screens use the on-screen joystick and drag to look. You walk on the streets, the square, the station stairs and the platforms. |
 | 自由视角 (orbit) | Drag to rotate, scroll to zoom, right-drag to pan |
 | 声音 (sound) | Crossing bell, train motor and rail joints, door chime, birds and breeze. All sound is synthesised with WebAudio and stays off until you enable it. |
 | **H** | Hide / show the interface |
 
-The trains run a 150-second timetable:
+The trains run a 150-second timetable. The scene opens at t = 104 s, just
+before a train arrives over the level crossing:
 - **t = 0 s:** the westbound train stands at platform 1 with its doors open.
 - **t ≈ 55 s:** the eastbound train arrives at platform 2.
 - **t ≈ 116 s:** a westbound train rolls slowly over the level crossing with the barriers down.
@@ -92,13 +93,14 @@ the trains' wake. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 | Parameter | Effect |
 | --- | --- |
-| `?view=hero\|street\|plaza\|crossing\|platform\|levee\|aerial` | Start on a shot |
+| `?view=hero\|cafe\|street\|plaza\|crossing\|platform\|levee\|aerial` | Start on a shot |
 | `?mode=tour\|walk\|orbit` | Start in a camera mode |
-| `?t=116` | Start the timetable at a given second |
+| `?t=116` | Start the timetable at a given second (default 104) |
 | `?pause=1` | Freeze time |
 | `?q=low` | Light preset: smaller shadow map, no MSAA or bloom |
 | `?only=station,train` | Build only some modules |
 | `?fx=0` | Outlines off |
+| `?fonts=0` | Skip the Google Fonts request; signage uses local Japanese fonts |
 | `?sun=az,el` | Move the sun (degrees) |
 | `?debug=layout` | Show the layout plan's footprints |
 

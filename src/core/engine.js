@@ -46,7 +46,8 @@ export function createEngine(canvas, params) {
   }
 
   const lighting = createLighting(scene, renderer, quality);
-  const sim = createSim({ startTime: params.has('t') ? Number(params.get('t')) : 0 });
+  // default start just before the westbound train rolls over the level crossing (bell, barriers, arrival)
+  const sim = createSim({ startTime: params.has('t') ? Number(params.get('t')) : 104 });
   if (params.has('pause')) sim.timeScale = 0;
   const audio = createAudio();
 
